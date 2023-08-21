@@ -60,7 +60,7 @@ class OpenEndedContrastiveEarlyExit:
             print("Added stop word: ", stop_word, 'with the ids', stop_word_ids, flush=True)
         self.stopping_criteria.append(LLamaQaStoppingCriteria(list_stop_word_ids))
 
-    def generate(self, input_text, max_new_tokens=256, top_p=0.95, top_k=0, temperature=0.8, final_layer=None, base_layer=None, base_layers=[], divergence_type='js', mode='vanilla', verbose=True, remove_stop_words=False, skip_layer0=False, relative_top=0.1, relative_top_with_norm=False, contrast_disagree_only=False, **kwargs):
+    def generate(self, input_text, max_new_tokens=256, top_p=0.95, top_k=0, temperature=0.8, final_layer=None, base_layer=None, base_layers=[], divergence_type='js', mode='vanilla', verbose=True, remove_stop_words=False, skip_layer0=False, relative_top=0.1, **kwargs):
         with torch.no_grad():
 
             input_ids = self.tokenizer(input_text, return_tensors="pt").input_ids.to(self.device)
@@ -76,13 +76,13 @@ class OpenEndedContrastiveEarlyExit:
                 outputs = self.model.generate(input_ids, max_length=max_len, num_return_sequences=1,
                                     output_scores=True, return_dict_in_generate=True, early_exit_contrastive_decoding=True,
                                     final_layer=final_layer, base_layer=base_layer,
-                                    top_p=top_p, top_k=top_k, temperature=temperature, stopping_criteria=self.stopping_criteria, skip_layer0=skip_layer0, relative_top=relative_top, relative_top_with_norm=relative_top_with_norm, contrast_disagree_only=contrast_disagree_only, **kwargs)
+                                    top_p=top_p, top_k=top_k, temperature=temperature, stopping_criteria=self.stopping_criteria, skip_layer0=skip_layer0, relative_top=relative_top, **kwargs)
             elif mode == 'dynamic_early_exit_contrastive':
                 assert final_layer is not None, "final_layer must be specified"
                 assert base_layers is not None, "base_layers must be specified"
                 outputs = self.model.generate(input_ids, max_length=max_len, num_return_sequences=1,
                                         output_scores=True, return_dict_in_generate=True, early_exit_contrastive_decoding=True,
-                                        top_p=top_p, top_k=top_k, temperature=temperature, stopping_criteria=self.stopping_criteria, skip_layer0=skip_layer0, relative_top=relative_top, relative_top_with_norm=relative_top_with_norm, contrast_disagree_only=contrast_disagree_only, 
+                                        top_p=top_p, top_k=top_k, temperature=temperature, stopping_criteria=self.stopping_criteria, skip_layer0=skip_layer0, relative_top=relative_top, 
                                         final_layer=final_layer, base_layer=None, dynamic_exit_layers=base_layers,
                                         divergence_type=divergence_type, **kwargs,)
                 critical_layer_dist = outputs.critical_layer_dist
@@ -119,7 +119,7 @@ class OpenEndedContrastiveEarlyExit:
         probs_thresh = probs_thresh.unsqueeze(-1)
         return scores_normalized < probs_thresh
 
-    def lm_score(self, input_text1, input_text2, pmi=False, max_new_tokens=256, top_p=0.95, top_k=0, temperature=0.8, final_layer=None, base_layer=None, base_layers=[], divergence_type='js', mode='vanilla', verbose=True, remove_stop_words=False, skip_layer0=False, relative_top=0.1, relative_top_with_norm=False, relative_top_value=-1000.0, contrast_disagree_only=False, extrapolate_coeff=None, **kwargs):
+    def lm_score(self, input_text1, input_text2, pmi=False, max_new_tokens=256, top_p=0.95, top_k=0, temperature=0.8, final_layer=None, base_layer=None, base_layers=[], divergence_type='js', mode='vanilla', verbose=True, remove_stop_words=False, skip_layer0=False, relative_top=0.1, relative_top_value=-1000.0, **kwargs):
         with torch.no_grad():
             input_text = input_text1 + input_text2
             input_ids = self.tokenizer(input_text, return_tensors="pt").input_ids.to(self.device)
@@ -156,10 +156,7 @@ class OpenEndedContrastiveEarlyExit:
                 final_logits = dict_outputs[final_layer][0, prefix_ids.shape[-1] - 1: -1, :]
                 final_logits = final_logits.log_softmax(dim=-1)
                 base_logits = base_logits.log_softmax(dim=-1)
-                if extrapolate_coeff is None or extrapolate_coeff >= 1000.0:
-                    diff_logits = final_logits - base_logits
-                else:
-                    diff_logits = base_logits + extrapolate_coeff * (final_logits - base_logits)
+                diff_logits = final_logits - base_logits
                 if relative_top > 0.0:
                     relative_top_mask = self.get_relative_top_filter(final_logits, relative_top)
                     diff_logits = torch.where(relative_top_mask, relative_top_value, diff_logits)
@@ -202,10 +199,7 @@ class OpenEndedContrastiveEarlyExit:
                     final_logits = dict_outputs[final_layer][0, prefix_ids.shape[-1] - 1: -1, :]
                     final_logits = final_logits.log_softmax(dim=-1)
                     base_logits = base_logits.log_softmax(dim=-1)
-                    if extrapolate_coeff is None or extrapolate_coeff >= 1000.0:
-                        diff_logits = final_logits - base_logits
-                    else:
-                        diff_logits = base_logits + extrapolate_coeff * (final_logits - base_logits)
+                    diff_logits = final_logits - base_logits
                     if relative_top > 0.0:
                         relative_top_mask = self.get_relative_top_filter(final_logits, relative_top)
                         diff_logits = torch.where(relative_top_mask, relative_top_value, diff_logits)
@@ -272,10 +266,7 @@ class OpenEndedContrastiveEarlyExit:
                 final_logits = dict_outputs[final_layer][0, prefix_ids.shape[-1] - 1:-1]
                 final_logits = final_logits.log_softmax(dim=-1)
                 base_logits = base_logits.log_softmax(dim=-1)
-                if extrapolate_coeff is None or extrapolate_coeff >= 1000.0:
-                    diff_logits = final_logits - base_logits
-                else:
-                    diff_logits = base_logits + extrapolate_coeff * (final_logits - base_logits)
+                diff_logits = final_logits - base_logits
 
                 if relative_top > 0.0:
                     relative_top_mask = self.get_relative_top_filter(final_logits, relative_top)

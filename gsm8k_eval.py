@@ -243,19 +243,16 @@ if __name__ == "__main__":
     parser.add_argument("--divergence-type", type=str, default="js")
     parser.add_argument("--parallel", action="store_true")
     parser.add_argument("--total-shard", type=int, default=8)
-    parser.add_argument("--shard-id", type=int, default=0)
+    parser.add_argument("--shard-id", type=int, default=None)
     parser.add_argument("--max-new-tokens", type=int, default=256)
     parser.add_argument("--top_p", type=float, default=0.95)
     parser.add_argument("--top_k", type=int, default=0)
     parser.add_argument("--temperature", type=float, default=0.9)
     parser.add_argument("--repetition_penalty", type=float, default=1.0)
-    parser.add_argument("--extrapolate_coeff", type=float, default=10000.0)
     parser.add_argument("--relative_top", type=float, default=0.1)
-    parser.add_argument("--relative_top_with_norm", action="store_true")
-    parser.add_argument("--contrast_disagree_only", action="store_true")
-    parser.add_argument("--pre_softmax", action="store_true")
     parser.add_argument("--do_sample", action="store_true")
     parser.add_argument("--do_shuffle", action="store_true")
+    parser.add_argument("--debug", action="store_true")
     parser.add_argument("--penalty_alpha", type=float, default=None)
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--retry", type=int, default=1)
@@ -286,6 +283,9 @@ if __name__ == "__main__":
     if args.parallel:
         chunk_size = len(list_data_dict) // args.total_shard
         list_data_dict = list_data_dict[args.shard_id * chunk_size: (args.shard_id + 1) * chunk_size]
+
+    if args.debug:
+        list_data_dict = list_data_dict[:10]
     
     llm = OpenEndedContrastiveEarlyExit(model_name, device, num_gpus)
     llm.set_stop_words(["Q:", "\end{code}"])
@@ -315,7 +315,7 @@ if __name__ == "__main__":
         input_text = build_prompt(sample['instruction'], N_SHOT, COT_FLAG, args.do_shuffle)
         # generate_kwargs = dict(max_new_tokens=256, top_p=0.95, temperature=0.8)
         # generate_kwargs = dict(max_new_tokens=256, top_p=0.95, temperature=0.8, mode=mode, final_layer=final_layer, base_layer=base_layer, base_layers=dynamic_exit_layers, divergence_type=args.divergence_type)
-        generate_kwargs = dict(max_new_tokens=args.max_new_tokens, penalty_alpha=args.penalty_alpha, do_sample=args.do_sample, top_p=args.top_p, top_k=args.top_k, temperature=args.temperature, repetition_penalty=args.repetition_penalty, extrapolate_coeff=args.extrapolate_coeff, pre_softmax=args.pre_softmax, mode=mode, final_layer=final_layer, base_layer=base_layer, base_layers=dynamic_exit_layers, divergence_type=args.divergence_type, relative_top=args.relative_top, relative_top_with_norm=args.relative_top_with_norm, contrast_disagree_only=args.contrast_disagree_only)
+        generate_kwargs = dict(max_new_tokens=args.max_new_tokens, penalty_alpha=args.penalty_alpha, do_sample=args.do_sample, top_p=args.top_p, top_k=args.top_k, temperature=args.temperature, repetition_penalty=args.repetition_penalty, mode=mode, final_layer=final_layer, base_layer=base_layer, base_layers=dynamic_exit_layers, divergence_type=args.divergence_type, relative_top=args.relative_top)
         model_completion, c_dist = llm.generate(input_text, **generate_kwargs)
         if mode == "dynamic_early_exit_contrastive":
             for k, v in c_dist.items():

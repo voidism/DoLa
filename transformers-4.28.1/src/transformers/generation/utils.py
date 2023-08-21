@@ -1132,12 +1132,8 @@ class GenerationMixin:
         dynamic_exit_layers: Optional[List[int]] = None,
         critical_layer_threshold: Optional[float] = None,
         divergence_type: Optional[str] = None,
-        extrapolate_coeff: Optional[float] = None,
-        pre_softmax: Optional[bool] = None,
         skip_layer0: Optional[bool] = None,
         relative_top: Optional[float] = 0.1,
-        relative_top_with_norm: Optional[bool] = None,
-        contrast_disagree_only: Optional[bool] = None,
         contrastive_decoding: Optional[bool] = None,
         student_model = None,
         streamer: Optional["BaseStreamer"] = None,
@@ -1467,12 +1463,8 @@ class GenerationMixin:
                 dynamic_exit_layers=dynamic_exit_layers,
                 critical_layer_threshold=critical_layer_threshold,
                 divergence_type=divergence_type,
-                extrapolate_coeff=extrapolate_coeff,
-                pre_softmax=pre_softmax,
                 skip_layer0=skip_layer0,
                 relative_top=relative_top,
-                relative_top_with_norm=relative_top_with_norm,
-                contrast_disagree_only=contrast_disagree_only,
                 streamer=streamer,
                 **model_kwargs,
             )
@@ -1498,11 +1490,7 @@ class GenerationMixin:
                 output_scores=generation_config.output_scores,
                 return_dict_in_generate=generation_config.return_dict_in_generate,
                 synced_gpus=synced_gpus,
-                extrapolate_coeff=extrapolate_coeff,
-                pre_softmax=pre_softmax,
                 relative_top=relative_top,
-                relative_top_with_norm=relative_top_with_norm,
-                contrast_disagree_only=contrast_disagree_only,
                 streamer=streamer,
                 **model_kwargs,
             )
@@ -1576,11 +1564,8 @@ class GenerationMixin:
                 dynamic_exit_layers=dynamic_exit_layers,
                 critical_layer_threshold=critical_layer_threshold,
                 divergence_type=divergence_type,
-                extrapolate_coeff=extrapolate_coeff,
-                pre_softmax=pre_softmax,
                 skip_layer0=skip_layer0,
                 relative_top=relative_top,
-                relative_top_with_norm=relative_top_with_norm,
                 synced_gpus=synced_gpus,
                 streamer=streamer,
                 **model_kwargs,
@@ -1608,10 +1593,7 @@ class GenerationMixin:
                 eos_token_id=generation_config.eos_token_id,
                 output_scores=generation_config.output_scores,
                 return_dict_in_generate=generation_config.return_dict_in_generate,
-                extrapolate_coeff=extrapolate_coeff,
-                pre_softmax=pre_softmax,
                 relative_top=relative_top,
-                relative_top_with_norm=relative_top_with_norm,
                 synced_gpus=synced_gpus,
                 streamer=streamer,
                 **model_kwargs,
@@ -2480,40 +2462,16 @@ class GenerationMixin:
         else:
             return input_ids
 
-    def relative_top_filter(self, scores: torch.FloatTensor, relative_top: float = 0.1, filter_value: float = -float("Inf"), min_tokens_to_keep: int = 1, pre_softmax: bool = False) -> torch.FloatTensor:
+    def relative_top_filter(self, scores: torch.FloatTensor, relative_top: float = 0.1, filter_value: float = -float("Inf"), min_tokens_to_keep: int = 1) -> torch.FloatTensor:
         scores_normalized = scores.log_softmax(dim=-1) 
         sorted_logits, sorted_indices = torch.sort(scores_normalized, descending=True)
         min_thresh = sorted_logits[..., min_tokens_to_keep-1] 
         probs_max = torch.max(scores_normalized, dim=-1).values
         probs_thresh = probs_max + np.log(relative_top)
-        # print(min_thresh, probs_thresh)
         probs_thresh = torch.min(min_thresh, probs_thresh)
         probs_thresh = probs_thresh.unsqueeze(-1)
-        if pre_softmax:
-            scores_normalized[scores_normalized < probs_thresh] = filter_value
-            return scores_normalized
-        else:
-            scores[scores_normalized < probs_thresh] = filter_value
-            return scores
-        
-    def relative_top_filter_with_norm(self, scores: torch.FloatTensor, base_scores: torch.FloatTensor, relative_top: float = 0.1, filter_value: float = -float("Inf"), min_tokens_to_keep: int = 1, pre_softmax: bool = False) -> torch.FloatTensor:
-        scores_normalized = scores.log_softmax(dim=-1) 
-        sorted_logits, sorted_indices = torch.sort(scores_normalized, descending=True)
-        min_thresh = sorted_logits[..., min_tokens_to_keep-1] 
-        probs_max = torch.max(scores_normalized, dim=-1).values
-        probs_thresh = probs_max + np.log(relative_top)
-        # print(min_thresh, probs_thresh)
-        probs_thresh = torch.min(min_thresh, probs_thresh)
-        probs_thresh = probs_thresh.unsqueeze(-1)
-        if pre_softmax:
-            base_scores_normalized = base_scores.log_softmax(dim=-1)
-            base_scores_normalized[scores_normalized < probs_thresh] = filter_value
-            scores_normalized[scores_normalized < probs_thresh] = filter_value
-            return scores_normalized, base_scores_normalized
-        else:
-            base_scores[scores_normalized < probs_thresh] = filter_value
-            scores[scores_normalized < probs_thresh] = filter_value
-            return scores, base_scores
+        scores_normalized[scores_normalized < probs_thresh] = filter_value
+        return scores_normalized
 
     def early_exit_contrastive_greedy_decode(
         self,
@@ -2522,10 +2480,6 @@ class GenerationMixin:
         base_layer: Optional[int] = None,
         dynamic_exit_layers: Optional[List[int]] = None,
         relative_top: float = 0.1,
-        relative_top_with_norm: Optional[bool] = None,
-        contrast_disagree_only: Optional[bool] = None,
-        extrapolate_coeff: Optional[float] = None,
-        pre_softmax: Optional[bool] = None,
         skip_layer0: Optional[bool] = None,
         divergence_type: Optional[str] = None,
         critical_layer_threshold: float = None,
@@ -2726,101 +2680,31 @@ class GenerationMixin:
                 base_logits = dict_outputs[base_layer][:, -1, :]
                 final_logits = dict_outputs[final_layer][:, -1, :]
                 if relative_top > 0.0:
-                    if not relative_top_with_norm:
-                        final_logits = self.relative_top_filter(final_logits, relative_top, pre_softmax=pre_softmax)
-                        if pre_softmax:
-                            base_logits = base_logits.log_softmax(dim=-1)
-                    else:
-                        final_logits, base_logits = self.relative_top_filter_with_norm(final_logits, base_logits, relative_top, pre_softmax=False)
-                        final_logits = final_logits.log_softmax(dim=-1)
-                        base_logits = base_logits.log_softmax(dim=-1)
+                    final_logits = self.relative_top_filter(final_logits, relative_top)
+                    base_logits = base_logits.log_softmax(dim=-1)
                     mask = final_logits[0] < -1e3
                     base_logits[0][mask] = -1e3
-                    if debug:
-                        # find the argmax token from (1) final_logits and (2) base_logits and (3) final_logits - base_logits
-                        argmax_final = torch.argmax(final_logits[0], dim=-1).item()
-                        argmax_base = torch.argmax(base_logits[0], dim=-1).item()
-                        argmax_diff = torch.argmax(final_logits[0] - base_logits[0], dim=-1).item()
-                        # print(f"argmax_final: {argmax_final}, argmax_base: {argmax_base}, argmax_diff: {argmax_diff}")
-                        # print(f"base_logits: {base_logits.shape}, final_logits: {final_logits.shape}")
-                        # find the tokens with non-zero probability
-                        base_tokens = torch.nonzero(final_logits[0].exp() > 0.0, as_tuple=True)
-                        final_tokens = torch.nonzero(final_logits[0].exp() > 0.0, as_tuple=True)
-                        raw_base_tokens = tokenizer.convert_ids_to_tokens(base_tokens[0])
-                        raw_final_tokens = tokenizer.convert_ids_to_tokens(final_tokens[0])
-                        # print logits with tokens one by one
-                        print("---", idx, "---")
-                        for i in range(len(base_tokens[0])):
-                            post_fix = ''
-                            if final_tokens[0][i] == argmax_final:
-                                post_fix += ' (final)'
-                            if base_tokens[0][i] == argmax_base:
-                                post_fix += ' (base)'
-                            if base_tokens[0][i] == argmax_diff:
-                                post_fix += ' (diff)'
-                            print(f"{raw_base_tokens[i]}{' '*(10-len(raw_base_tokens[i]))}: final:{final_logits[0][final_tokens[0][i]].item():.2f}, base:{base_logits[0][base_tokens[0][i]].item():.2f}; diff:{(final_logits[0][final_tokens[0][i]] - base_logits[0][base_tokens[0][i]]).item():.2f} {post_fix}")
-                        idx += 1
-                if contrast_disagree_only and final_logits.argmax(-1) == base_logits.argmax(-1):
-                        logits = final_logits
-                elif extrapolate_coeff is None or extrapolate_coeff >= 1000.0:
-                    logits = final_logits - base_logits
-                else:
-                    logits = base_logits + extrapolate_coeff * (final_logits - base_logits)
+
+                logits = final_logits - base_logits
                 next_token_logits = logits
             else:
-                # pick the less like layer to contrast with
-                # final_hidden = outputs.hidden_states[final_layer][:, -1, :]
-                # dynamic_exit_hiddens = [outputs.hidden_states[i][:, -1, :] for i in dynamic_exit_layers]
-                # cosine_similarities = torch.stack(
-                #     [F.cosine_similarity(final_hidden, hidden, dim=-1) for hidden in dynamic_exit_hiddens]
-                # ).squeeze(-1)
-                
-                # less_than_threshold = cosine_similarities < critical_layer_threshold
-                # # get the layer that is the first one to be less than critical_layer_threshold similar to the final layer
-                # less_than_threshold_idx = less_than_threshold.nonzero()
-                # if len(less_than_threshold_idx) == 0:
-                #     critical_layer = 0
-                # else:
-                #     critical_layer = int(less_than_threshold_idx.argmax())
-                
                 kl_divs = torch.stack(
-                    # reverse KL-divergence
-                    # [F.kl_div(F.log_softmax(dict_outputs[i][:, -1, :], dim=-1), F.softmax(dict_outputs[final_layer][:, -1, :], dim=-1), reduction='batchmean') for i in dynamic_exit_layers]
-                    # KL-divergence
-                    [F.kl_div(F.log_softmax(dict_outputs[i][:, -1, :], dim=-1), F.softmax(dict_outputs[final_layer][:, -1, :], dim=-1), reduction='batchmean') for i in dynamic_exit_layers] if divergence_type == 'kl' else
-                    # JS-divergence
                     [0.5 * F.kl_div(F.log_softmax(dict_outputs[final_layer][:, -1, :], dim=-1), F.softmax(dict_outputs[i][:, -1, :], dim=-1), reduction='batchmean') + 0.5 * F.kl_div(F.log_softmax(dict_outputs[i][:, -1, :], dim=-1), F.softmax(dict_outputs[final_layer][:, -1, :], dim=-1), reduction='batchmean') for i in dynamic_exit_layers]
-                    # [F.cosine_similarity(final_hidden - base_vector, hidden - base_vector, dim=-1) for hidden in dynamic_exit_hiddens]
-                    # [torch.dist(final_hidden - base_vector, hidden - base_vector) for hidden in dynamic_exit_hiddens]
                 ).squeeze(-1)
                 critical_layer = dynamic_exit_layers[int(kl_divs.argmax().cpu().item())]
                 critical_layer_dist[critical_layer] += 1
-                # debug
-                # print(f"critical_layer: {dynamic_exit_layers[critical_layer]}, cosine_similarities: {cosine_similarities} < {critical_layer_threshold}")
-                # to_print = ', '.join([f"{cosine_similarities[i].item():.2f}" for i in range(len(cosine_similarities))])
-                # print(f"critical_layer: {critical_layer}, cosine_similarities: [{to_print}]")
+
                 if skip_layer0 and critical_layer == 0:
                     next_token_logits = dict_outputs[final_layer][:, -1, :]
                 else:
                     base_logits = dict_outputs[critical_layer][:, -1, :]
                     final_logits = dict_outputs[final_layer][:, -1, :]
                     if relative_top > 0.0:
-                        if not relative_top_with_norm:
-                            final_logits = self.relative_top_filter(final_logits, relative_top, pre_softmax=pre_softmax)
-                            if pre_softmax:
-                                base_logits = base_logits.log_softmax(dim=-1)
-                        else:
-                            final_logits, base_logits = self.relative_top_filter_with_norm(final_logits, base_logits, relative_top, pre_softmax=False)
-                            final_logits = final_logits.log_softmax(dim=-1)
-                            base_logits = base_logits.log_softmax(dim=-1)
+                        final_logits = self.relative_top_filter(final_logits, relative_top)
+                        base_logits = base_logits.log_softmax(dim=-1)
                         mask = final_logits[0] < -1e3
                         base_logits[0][mask] = -1e3
-                    if contrast_disagree_only and final_logits.argmax(-1) == base_logits.argmax(-1):
-                        logits = final_logits
-                    elif extrapolate_coeff is None or extrapolate_coeff >= 1000.0:
-                        logits = final_logits - base_logits
-                    else:
-                        logits = base_logits + extrapolate_coeff * (final_logits - base_logits)
+                    logits = final_logits - base_logits
                     next_token_logits = logits
 
             # pre-process distribution
@@ -2905,10 +2789,6 @@ class GenerationMixin:
         input_ids: torch.LongTensor,
         student_model: torch.nn.Module,
         relative_top: float = 0.1,
-        relative_top_with_norm: Optional[bool] = None,
-        contrast_disagree_only: Optional[bool] = None,
-        extrapolate_coeff: Optional[float] = None,
-        pre_softmax: Optional[bool] = None,
         divergence_type: Optional[str] = None,
         logits_processor: Optional[LogitsProcessorList] = None,
         stopping_criteria: Optional[StoppingCriteriaList] = None,
@@ -3104,14 +2984,8 @@ class GenerationMixin:
             base_logits = student_outputs[0][:, -1, :]
             final_logits = outputs[0][:, -1, :]
             if relative_top > 0.0:
-                if not relative_top_with_norm:
-                    final_logits = self.relative_top_filter(final_logits, relative_top, pre_softmax=pre_softmax)
-                    if pre_softmax:
-                        base_logits = base_logits.log_softmax(dim=-1)
-                else:
-                    final_logits, base_logits = self.relative_top_filter_with_norm(final_logits, base_logits, relative_top, pre_softmax=False)
-                    final_logits = final_logits.log_softmax(dim=-1)
-                    base_logits = base_logits.log_softmax(dim=-1)
+                final_logits = self.relative_top_filter(final_logits, relative_top)
+                base_logits = base_logits.log_softmax(dim=-1)
                 mask = final_logits[0] < -1e3
                 base_logits[0][mask] = -1e3
                 if debug:
@@ -3138,12 +3012,7 @@ class GenerationMixin:
                             post_fix += ' (diff)'
                         print(f"{raw_base_tokens[i]}{' '*(10-len(raw_base_tokens[i]))}: final:{final_logits[0][final_tokens[0][i]].item():.2f}, base:{base_logits[0][base_tokens[0][i]].item():.2f}; diff:{(final_logits[0][final_tokens[0][i]] - base_logits[0][base_tokens[0][i]]).item():.2f} {post_fix}")
                     idx += 1
-            if contrast_disagree_only and final_logits.argmax(-1) == base_logits.argmax(-1):
-                logits = final_logits
-            elif extrapolate_coeff is None or extrapolate_coeff >= 1000.0:
-                logits = final_logits - base_logits
-            else:
-                logits = base_logits + extrapolate_coeff * (final_logits - base_logits)
+            logits = final_logits - base_logits
             next_token_logits = logits
 
             # pre-process distribution
@@ -3510,11 +3379,7 @@ class GenerationMixin:
         base_layer: Optional[int] = None,
         dynamic_exit_layers: Optional[List[int]] = None,
         relative_top: float = 0.1,
-        relative_top_with_norm: Optional[bool] = None,
-        contrast_disagree_only: Optional[bool] = None,
-        extrapolate_coeff: float = 10000.0,
         divergence_type: Optional[str] = None,
-        pre_softmax: Optional[bool] = None,
         skip_layer0: Optional[bool] = None,
         logits_processor: Optional[LogitsProcessorList] = None,
         stopping_criteria: Optional[StoppingCriteriaList] = None,
@@ -3727,55 +3592,18 @@ class GenerationMixin:
                 base_logits = dict_outputs[base_layer]
                 final_logits = dict_outputs[final_layer]
                 if relative_top > 0.0:
-                    if not relative_top_with_norm:
-                        final_logits = self.relative_top_filter(final_logits, relative_top, pre_softmax=pre_softmax)
-                        if pre_softmax:
-                            base_logits = base_logits.log_softmax(dim=-1)
-                    else:
-                        final_logits, base_logits = self.relative_top_filter_with_norm(final_logits, base_logits, relative_top, pre_softmax=False)
-                        final_logits = final_logits.log_softmax(dim=-1)
-                        base_logits = base_logits.log_softmax(dim=-1)
+                    final_logits = self.relative_top_filter(final_logits, relative_top)
+                    base_logits = base_logits.log_softmax(dim=-1)
                     mask = final_logits[0] < -1e3
                     base_logits[0][mask] = -1e3
-                if contrast_disagree_only and final_logits.argmax(-1) == base_logits.argmax(-1):
-                    logits = final_logits
-                elif extrapolate_coeff is None or extrapolate_coeff >= 1000.0:
-                    logits = final_logits - base_logits
-                else:
-                    logits = base_logits + extrapolate_coeff * (final_logits - base_logits)
+                logits = final_logits - base_logits
                 next_token_logits = logits[:, -1, :]
             else:
-                # pick the less like layer to contrast with
-                # final_hidden = outputs.hidden_states[final_layer][:, -1, :]
-                # dynamic_exit_hiddens = [outputs.hidden_states[i][:, -1, :] for i in dynamic_exit_layers]
-                # cosine_similarities = torch.stack(
-                #     [F.cosine_similarity(final_hidden, hidden, dim=-1) for hidden in dynamic_exit_hiddens]
-                # ).squeeze(-1)
-                
-                # less_than_threshold = cosine_similarities < critical_layer_threshold
-                # # get the layer that is the first one to be less than critical_layer_threshold similar to the final layer
-                # less_than_threshold_idx = less_than_threshold.nonzero()
-                # if len(less_than_threshold_idx) == 0:
-                #     critical_layer = 0
-                # else:
-                #     critical_layer = int(less_than_threshold_idx.argmax())
-                
                 kl_divs = torch.stack(
-                    # reverse KL-divergence
-                    # [F.kl_div(F.log_softmax(dict_outputs[i][:, -1, :], dim=-1), F.softmax(dict_outputs[final_layer][:, -1, :], dim=-1), reduction='batchmean') for i in dynamic_exit_layers]
-                    # KL-divergence
-                    [F.kl_div(F.log_softmax(dict_outputs[i][:, -1, :], dim=-1), F.softmax(dict_outputs[final_layer][:, -1, :], dim=-1), reduction='batchmean') for i in dynamic_exit_layers] if divergence_type == 'kl' else
-                    # JS-divergence
                     [0.5 * F.kl_div(F.log_softmax(dict_outputs[final_layer][:, -1, :], dim=-1), F.softmax(dict_outputs[i][:, -1, :], dim=-1), reduction='batchmean') + 0.5 * F.kl_div(F.log_softmax(dict_outputs[i][:, -1, :], dim=-1), F.softmax(dict_outputs[final_layer][:, -1, :], dim=-1), reduction='batchmean') for i in dynamic_exit_layers]
-                    # [F.cosine_similarity(final_hidden - base_vector, hidden - base_vector, dim=-1) for hidden in dynamic_exit_hiddens]
-                    # [torch.dist(final_hidden - base_vector, hidden - base_vector) for hidden in dynamic_exit_hiddens]
                 ).squeeze(-1)
                 critical_layer = dynamic_exit_layers[int(kl_divs.argmax().cpu().item())]
                 critical_layer_dist[critical_layer] += 1
-                # debug
-                # print(f"critical_layer: {dynamic_exit_layers[critical_layer]}, cosine_similarities: {cosine_similarities} < {critical_layer_threshold}")
-                # to_print = ', '.join([f"{cosine_similarities[i].item():.2f}" for i in range(len(cosine_similarities))])
-                # print(f"critical_layer: {critical_layer}, cosine_similarities: [{to_print}]")
                 
                 if skip_layer0 and critical_layer == 0:
                     next_token_logits = dict_outputs[final_layer][:, -1, :]
@@ -3783,22 +3611,11 @@ class GenerationMixin:
                     base_logits = dict_outputs[critical_layer][:, -1, :]
                     final_logits = dict_outputs[final_layer][:, -1, :]
                     if relative_top > 0.0:
-                        if not relative_top_with_norm:
-                            final_logits = self.relative_top_filter(final_logits, relative_top, pre_softmax=pre_softmax)
-                            if pre_softmax:
-                                base_logits = base_logits.log_softmax(dim=-1)
-                        else:
-                            final_logits, base_logits = self.relative_top_filter_with_norm(final_logits, base_logits, relative_top, pre_softmax=False)
-                            final_logits = final_logits.log_softmax(dim=-1)
-                            base_logits = base_logits.log_softmax(dim=-1)
+                        final_logits = self.relative_top_filter(final_logits, relative_top)
+                        base_logits = base_logits.log_softmax(dim=-1)
                         mask = final_logits[0] < -1e3
                         base_logits[0][mask] = -1e3
-                    if contrast_disagree_only and final_logits.argmax(-1) == base_logits.argmax(-1):
-                        logits = final_logits
-                    elif extrapolate_coeff is None or extrapolate_coeff >= 1000.0:
-                        logits = final_logits - base_logits
-                    else:
-                        logits = base_logits + extrapolate_coeff * (final_logits - base_logits)
+                    logits = final_logits - base_logits
                     next_token_logits = logits
 
             # pre-process distribution
@@ -3885,10 +3702,6 @@ class GenerationMixin:
         input_ids: torch.LongTensor,
         student_model: torch.nn.Module,
         relative_top: float = 0.1,
-        relative_top_with_norm: Optional[bool] = None,
-        contrast_disagree_only: Optional[bool] = None,
-        extrapolate_coeff: float = 10000.0,
-        pre_softmax: Optional[bool] = None,
         logits_processor: Optional[LogitsProcessorList] = None,
         stopping_criteria: Optional[StoppingCriteriaList] = None,
         logits_warper: Optional[LogitsProcessorList] = None,
@@ -4094,22 +3907,11 @@ class GenerationMixin:
             base_logits = student_outputs[0]
             final_logits = outputs[0]
             if relative_top > 0.0:
-                if not relative_top_with_norm:
-                    final_logits = self.relative_top_filter(final_logits, relative_top, pre_softmax=pre_softmax)
-                    if pre_softmax:
-                        base_logits = base_logits.log_softmax(dim=-1)
-                else:
-                    final_logits, base_logits = self.relative_top_filter_with_norm(final_logits, base_logits, relative_top, pre_softmax=False)
-                    final_logits = final_logits.log_softmax(dim=-1)
-                    base_logits = base_logits.log_softmax(dim=-1)
+                final_logits = self.relative_top_filter(final_logits, relative_top)
+                base_logits = base_logits.log_softmax(dim=-1)
                 mask = final_logits[0] < -1e3
                 base_logits[0][mask] = -1e3
-            if contrast_disagree_only and final_logits.argmax(-1) == base_logits.argmax(-1):
-                logits = final_logits
-            elif extrapolate_coeff is None or extrapolate_coeff >= 1000.0:
-                logits = final_logits - base_logits
-            else:
-                logits = base_logits + extrapolate_coeff * (final_logits - base_logits)
+            logits = final_logits - base_logits
             next_token_logits = logits[:, -1, :]
             
 

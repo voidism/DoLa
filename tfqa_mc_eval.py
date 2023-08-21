@@ -259,12 +259,8 @@ if __name__ == "__main__":
     parser.add_argument("--top_k", type=int, default=0)
     parser.add_argument("--temperature", type=float, default=0.9)
     parser.add_argument("--repetition_penalty", type=float, default=1.0)
-    parser.add_argument("--extrapolate_coeff", type=float, default=10000.0)
-    parser.add_argument("--pre_softmax", action="store_true")
     parser.add_argument("--relative_top", type=float, default=0.1)
     parser.add_argument("--relative_top_value", type=float, default=-1000.0)
-    parser.add_argument("--relative_top_with_norm", action="store_true")
-    parser.add_argument("--contrast_disagree_only", action="store_true")
     args = parser.parse_args()
     model_name = args.model_name
     num_gpus = args.num_gpus
@@ -331,7 +327,7 @@ if __name__ == "__main__":
             scores_true = []
             scores_false = []
 
-            generate_kwargs = dict(max_new_tokens=args.max_new_tokens, repetition_penalty=args.repetition_penalty, extrapolate_coeff=args.extrapolate_coeff, pre_softmax=args.pre_softmax, mode=mode, final_layer=final_layer, base_layer=base_layer, base_layers=dynamic_exit_layers, divergence_type=args.divergence_type, relative_top=args.relative_top, relative_top_with_norm=args.relative_top_with_norm, contrast_disagree_only=args.contrast_disagree_only, relative_top_value=args.relative_top_value)
+            generate_kwargs = dict(max_new_tokens=args.max_new_tokens, repetition_penalty=args.repetition_penalty, mode=mode, final_layer=final_layer, base_layer=base_layer, base_layers=dynamic_exit_layers, divergence_type=args.divergence_type, relative_top=args.relative_top, relative_top_value=args.relative_top_value)
 
             for temp_ans in ref_true:
                 # append the current answer choice to the prompt

@@ -63,14 +63,10 @@ if __name__ == "__main__":
     parser.add_argument("--answer-file", type=str, default="answer.jsonl")
     parser.add_argument("--num-gpus", type=int, default=1)
     parser.add_argument("--repetition_penalty", type=float, default=1.0)
-    parser.add_argument("--extrapolate_coeff", type=float, default=10000.0)
-    parser.add_argument("--pre_softmax", action="store_true")
     parser.add_argument("--early-exit-layers", type=str, default="-1")
     parser.add_argument("--divergence-type", type=str, default="js")
     parser.add_argument("--skip-layer0", action="store_true")
     parser.add_argument("--relative_top", type=float, default=0.1)
-    parser.add_argument("--relative_top_with_norm", action="store_true")
-    parser.add_argument("--contrast_disagree_only", action="store_true")
     parser.add_argument("--do_sample", action="store_true")
     args = parser.parse_args()
 
@@ -101,7 +97,6 @@ if __name__ == "__main__":
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
     llm = OpenEndedContrastiveEarlyExit(model_name, device, num_gpus)
     llm.set_stop_words(["### Human:"])
-    # generate_kwargs = dict(do_sample=True, max_new_tokens=1024, temperature=0.7, repetition_penalty=args.repetition_penalty, extrapolate_coeff=args.extrapolate_coeff, pre_softmax=args.pre_softmax, mode=mode, final_layer=final_layer, base_layer=base_layer, base_layers=dynamic_exit_layers, divergence_type=args.divergence_type, remove_stop_words=True, skip_layer0=args.skip_layer0)
-    generate_kwargs = dict(do_sample=True, max_new_tokens=1024, temperature=0.7, repetition_penalty=args.repetition_penalty, extrapolate_coeff=args.extrapolate_coeff, pre_softmax=args.pre_softmax, mode=mode, final_layer=final_layer, base_layer=base_layer, base_layers=dynamic_exit_layers, divergence_type=args.divergence_type, remove_stop_words=True, skip_layer0=args.skip_layer0, relative_top=args.relative_top, relative_top_with_norm=args.relative_top_with_norm, contrast_disagree_only=args.contrast_disagree_only)
+    generate_kwargs = dict(do_sample=True, max_new_tokens=1024, temperature=0.7, repetition_penalty=args.repetition_penalty, mode=mode, final_layer=final_layer, base_layer=base_layer, base_layers=dynamic_exit_layers, divergence_type=args.divergence_type, remove_stop_words=True, skip_layer0=args.skip_layer0, relative_top=args.relative_top)
 
     run_eval(llm, args.model_id, args.question_file, args.answer_file, generate_kwargs)
