@@ -7,7 +7,7 @@ from tqdm import tqdm
 import shortuuid
 
 from conversation import get_default_conv_template
-from open_ended_contrastive_early_exit import OpenEndedContrastiveEarlyExit
+from dola import DoLa
 
 
 def run_eval(llm, model_id, question_file, answer_file, generate_kwargs):
@@ -36,16 +36,7 @@ def get_model_answers(llm, model_id, question_jsons, generate_kwargs):
         conv.append_message(conv.roles[1], None)
         prompt = conv.get_prompt()
         outputs, c_dist = llm.generate(prompt, **generate_kwargs)
-        # inputs = tokenizer([prompt])
-        # output_ids = model.generate(
-        #     torch.as_tensor(inputs.input_ids).cuda(),
-        #     do_sample=True,
-        #     temperature=0.7,
-        #     max_new_tokens=1024)
-        # outputs = tokenizer.batch_decode(output_ids, skip_special_tokens=True)[0]
-        # skip_echo_len = len(prompt.replace("</s>", " ")) + 1
 
-        # outputs = outputs[skip_echo_len:].strip()
         ans_id = shortuuid.uuid()
         ans_jsons.append({"question_id": idx,
                           "text": outputs,
@@ -64,39 +55,37 @@ if __name__ == "__main__":
     parser.add_argument("--num-gpus", type=int, default=1)
     parser.add_argument("--repetition_penalty", type=float, default=1.0)
     parser.add_argument("--early-exit-layers", type=str, default="-1")
-    parser.add_argument("--divergence-type", type=str, default="js")
-    parser.add_argument("--skip-layer0", action="store_true")
     parser.add_argument("--relative_top", type=float, default=0.1)
     parser.add_argument("--do_sample", action="store_true")
     args = parser.parse_args()
 
     
     early_exit_layers = [int(x) for x in args.early_exit_layers.split(',')]
-    if early_exit_layers == [-1]:
+    if len(early_exit_layers) == 1:
         print("MODE: naive decoding from the last layer", flush=True)
-        mode = "vanilla"
-        final_layer = None
-        base_layer = None
-        dynamic_exit_layers = None
+        mode = "baseline"
+        mature_layer = None
+        premature_layer = None
+        candidate_premature_layers = None
     elif len(early_exit_layers) == 2:
         print(f"MODE: early exit contrastive with final layer: {early_exit_layers[1]} and base layer: {early_exit_layers[0]}")
-        mode = "early_exit_contrastive"
-        final_layer = early_exit_layers[1]
-        base_layer = early_exit_layers[0]
-        dynamic_exit_layers = None
+        mode = "dola-static"
+        mature_layer = early_exit_layers[1]
+        premature_layer = early_exit_layers[0]
+        candidate_premature_layers = None
     else:
         print(f"MODE: dynamic early exit contrastive with final layer: {early_exit_layers[-1]} and base layers: {early_exit_layers[:-1]}")
-        mode = "dynamic_early_exit_contrastive"
-        final_layer = early_exit_layers[-1]
-        base_layer = None
-        dynamic_exit_layers = early_exit_layers[:-1]
-        critical_layer_dist = {l:0 for l in dynamic_exit_layers}
+        mode = "dola"
+        mature_layer = early_exit_layers[-1]
+        premature_layer = None
+        candidate_premature_layers = early_exit_layers[:-1]
+        premature_layer_dist = {l:0 for l in candidate_premature_layers}
 
     model_name = args.model_name
     num_gpus = args.num_gpus
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
-    llm = OpenEndedContrastiveEarlyExit(model_name, device, num_gpus)
+    llm = DoLa(model_name, device, num_gpus)
     llm.set_stop_words(["### Human:"])
-    generate_kwargs = dict(do_sample=True, max_new_tokens=1024, temperature=0.7, repetition_penalty=args.repetition_penalty, mode=mode, final_layer=final_layer, base_layer=base_layer, base_layers=dynamic_exit_layers, divergence_type=args.divergence_type, remove_stop_words=True, skip_layer0=args.skip_layer0, relative_top=args.relative_top)
+    generate_kwargs = dict(do_sample=True, max_new_tokens=1024, temperature=0.7, repetition_penalty=args.repetition_penalty, mode=mode, mature_layer=mature_layer, premature_layer=premature_layer, candidate_premature_layers=candidate_premature_layers, remove_stop_words=True, relative_top=args.relative_top)
 
     run_eval(llm, args.model_id, args.question_file, args.answer_file, generate_kwargs)

@@ -8,7 +8,8 @@ Code for the paper "Decoding in the Depths: Contrasting Layerwise Knowledge Impr
 ```
 pip install -e transformers-4.28.1
 pip install datasets
-pip install openai # -> for truthfulqa and gpt4_eval
+pip install accelerate
+pip install openai # -> only for truthfulqa and gpt4_eval
 ```
 
 ## Reference Repositories

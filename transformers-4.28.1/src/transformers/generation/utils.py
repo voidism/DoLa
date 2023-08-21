@@ -108,7 +108,7 @@ class GreedySearchDecoderOnlyOutput(ModelOutput):
     scores: Optional[Tuple[torch.FloatTensor]] = None
     attentions: Optional[Tuple[Tuple[torch.FloatTensor]]] = None
     hidden_states: Optional[Tuple[Tuple[torch.FloatTensor]]] = None
-    critical_layer_dist: Optional[Dict[int, int]] = None
+    premature_layer_dist: Optional[Dict[int, int]] = None
 
 
 @dataclass
@@ -248,7 +248,7 @@ class SampleDecoderOnlyOutput(ModelOutput):
     scores: Optional[Tuple[torch.FloatTensor]] = None
     attentions: Optional[Tuple[Tuple[torch.FloatTensor]]] = None
     hidden_states: Optional[Tuple[Tuple[torch.FloatTensor]]] = None
-    critical_layer_dist: Optional[Dict[int, int]] = None
+    premature_layer_dist: Optional[Dict[int, int]] = None
 
 
 @dataclass
@@ -1126,13 +1126,10 @@ class GenerationMixin:
         stopping_criteria: Optional[StoppingCriteriaList] = None,
         prefix_allowed_tokens_fn: Optional[Callable[[int, torch.Tensor], List[int]]] = None,
         synced_gpus: Optional[bool] = None,
-        early_exit_contrastive_decoding: Optional[bool] = None,
-        final_layer: Optional[int] = None,
+        dola_decoding: Optional[bool] = None,
+        mature_layer: Optional[int] = None,
         base_layer: Optional[int] = None,
-        dynamic_exit_layers: Optional[List[int]] = None,
-        critical_layer_threshold: Optional[float] = None,
-        divergence_type: Optional[str] = None,
-        skip_layer0: Optional[bool] = None,
+        candidate_premature_layers: Optional[List[int]] = None,
         relative_top: Optional[float] = 0.1,
         contrastive_decoding: Optional[bool] = None,
         student_model = None,
@@ -1442,14 +1439,14 @@ class GenerationMixin:
             generation_config=generation_config, stopping_criteria=stopping_criteria
         )
         # 10. go into different generation modes
-        if is_greedy_gen_mode and early_exit_contrastive_decoding:
+        if is_greedy_gen_mode and dola_decoding:
             if generation_config.num_return_sequences > 1:
                 raise ValueError(
                     f"num_return_sequences has to be 1, but is {generation_config.num_return_sequences} when doing"
                     " greedy search."
                 )
             # 11. run greedy search
-            return self.early_exit_contrastive_greedy_decode(
+            return self.dola_greedy_decode(
                 input_ids,
                 logits_processor=logits_processor,
                 stopping_criteria=stopping_criteria,
@@ -1458,12 +1455,9 @@ class GenerationMixin:
                 output_scores=generation_config.output_scores,
                 return_dict_in_generate=generation_config.return_dict_in_generate,
                 synced_gpus=synced_gpus,
-                final_layer=final_layer,
+                mature_layer=mature_layer,
                 base_layer=base_layer,
-                dynamic_exit_layers=dynamic_exit_layers,
-                critical_layer_threshold=critical_layer_threshold,
-                divergence_type=divergence_type,
-                skip_layer0=skip_layer0,
+                candidate_premature_layers=candidate_premature_layers,
                 relative_top=relative_top,
                 streamer=streamer,
                 **model_kwargs,
@@ -1538,7 +1532,7 @@ class GenerationMixin:
                 **model_kwargs,
             )
 
-        elif is_sample_gen_mode and early_exit_contrastive_decoding:
+        elif is_sample_gen_mode and dola_decoding:
             # 11. prepare logits warper
             logits_warper = self._get_logits_warper(generation_config)
 
@@ -1550,7 +1544,7 @@ class GenerationMixin:
                 **model_kwargs,
             )
             # 13. run sample
-            return self.early_exit_contrastive_sample(
+            return self.dola_sample(
                 input_ids,
                 logits_processor=logits_processor,
                 logits_warper=logits_warper,
@@ -1559,12 +1553,9 @@ class GenerationMixin:
                 eos_token_id=generation_config.eos_token_id,
                 output_scores=generation_config.output_scores,
                 return_dict_in_generate=generation_config.return_dict_in_generate,
-                final_layer=final_layer,
+                mature_layer=mature_layer,
                 base_layer=base_layer,
-                dynamic_exit_layers=dynamic_exit_layers,
-                critical_layer_threshold=critical_layer_threshold,
-                divergence_type=divergence_type,
-                skip_layer0=skip_layer0,
+                candidate_premature_layers=candidate_premature_layers,
                 relative_top=relative_top,
                 synced_gpus=synced_gpus,
                 streamer=streamer,
@@ -2473,16 +2464,13 @@ class GenerationMixin:
         scores_normalized[scores_normalized < probs_thresh] = filter_value
         return scores_normalized
 
-    def early_exit_contrastive_greedy_decode(
+    def dola_greedy_decode(
         self,
         input_ids: torch.LongTensor,
-        final_layer: int,
+        mature_layer: int,
         base_layer: Optional[int] = None,
-        dynamic_exit_layers: Optional[List[int]] = None,
+        candidate_premature_layers: Optional[List[int]] = None,
         relative_top: float = 0.1,
-        skip_layer0: Optional[bool] = None,
-        divergence_type: Optional[str] = None,
-        critical_layer_threshold: float = None,
         logits_processor: Optional[LogitsProcessorList] = None,
         stopping_criteria: Optional[StoppingCriteriaList] = None,
         max_length: Optional[int] = None,
@@ -2634,21 +2622,16 @@ class GenerationMixin:
 
         this_peer_finished = False  # used by synced_gpus only
 
-        if base_layer is not None and dynamic_exit_layers is None:
-            early_exit_layers = [base_layer, final_layer]
+        if base_layer is not None and candidate_premature_layers is None:
+            early_exit_layers = [base_layer, mature_layer]
             num_base_layers = 1
-            critical_layer_dist = {}
-        elif dynamic_exit_layers is not None:
-            early_exit_layers = dynamic_exit_layers + [final_layer]
-            num_base_layers = len(dynamic_exit_layers)
-            critical_layer_dist = {l:0 for l in dynamic_exit_layers}
+            premature_layer_dist = {}
+        elif candidate_premature_layers is not None:
+            early_exit_layers = candidate_premature_layers + [mature_layer]
+            num_base_layers = len(candidate_premature_layers)
+            premature_layer_dist = {l:0 for l in candidate_premature_layers}
         else:
-            raise ValueError("You must specify either `base_layer` or `dynamic_exit_layers`")
-        debug = False
-        if debug:
-            from transformers import AutoTokenizer
-            tokenizer = AutoTokenizer.from_pretrained("huggyllama/llama-7b")
-            idx = 0
+            raise ValueError("You must specify either `base_layer` or `candidate_premature_layers`")
         
         while True:
             if synced_gpus:
@@ -2678,7 +2661,7 @@ class GenerationMixin:
                 continue  # don't waste resources running the code we don't need
             if base_layer is not None:
                 base_logits = dict_outputs[base_layer][:, -1, :]
-                final_logits = dict_outputs[final_layer][:, -1, :]
+                final_logits = dict_outputs[mature_layer][:, -1, :]
                 if relative_top > 0.0:
                     final_logits = self.relative_top_filter(final_logits, relative_top)
                     base_logits = base_logits.log_softmax(dim=-1)
@@ -2688,24 +2671,21 @@ class GenerationMixin:
                 logits = final_logits - base_logits
                 next_token_logits = logits
             else:
-                kl_divs = torch.stack(
-                    [0.5 * F.kl_div(F.log_softmax(dict_outputs[final_layer][:, -1, :], dim=-1), F.softmax(dict_outputs[i][:, -1, :], dim=-1), reduction='batchmean') + 0.5 * F.kl_div(F.log_softmax(dict_outputs[i][:, -1, :], dim=-1), F.softmax(dict_outputs[final_layer][:, -1, :], dim=-1), reduction='batchmean') for i in dynamic_exit_layers]
+                js_divs = torch.stack(
+                    [0.5 * F.kl_div(F.log_softmax(dict_outputs[mature_layer][:, -1, :], dim=-1), F.softmax(dict_outputs[i][:, -1, :], dim=-1), reduction='batchmean') + 0.5 * F.kl_div(F.log_softmax(dict_outputs[i][:, -1, :], dim=-1), F.softmax(dict_outputs[mature_layer][:, -1, :], dim=-1), reduction='batchmean') for i in candidate_premature_layers]
                 ).squeeze(-1)
-                critical_layer = dynamic_exit_layers[int(kl_divs.argmax().cpu().item())]
-                critical_layer_dist[critical_layer] += 1
+                premature_layer = candidate_premature_layers[int(js_divs.argmax().cpu().item())]
+                premature_layer_dist[premature_layer] += 1
 
-                if skip_layer0 and critical_layer == 0:
-                    next_token_logits = dict_outputs[final_layer][:, -1, :]
-                else:
-                    base_logits = dict_outputs[critical_layer][:, -1, :]
-                    final_logits = dict_outputs[final_layer][:, -1, :]
-                    if relative_top > 0.0:
-                        final_logits = self.relative_top_filter(final_logits, relative_top)
-                        base_logits = base_logits.log_softmax(dim=-1)
-                        mask = final_logits[0] < -1e3
-                        base_logits[0][mask] = -1e3
-                    logits = final_logits - base_logits
-                    next_token_logits = logits
+                base_logits = dict_outputs[premature_layer][:, -1, :]
+                final_logits = dict_outputs[mature_layer][:, -1, :]
+                if relative_top > 0.0:
+                    final_logits = self.relative_top_filter(final_logits, relative_top)
+                    base_logits = base_logits.log_softmax(dim=-1)
+                    mask = final_logits[0] < -1e3
+                    base_logits[0][mask] = -1e3
+                logits = final_logits - base_logits
+                next_token_logits = logits
 
             # pre-process distribution
             next_tokens_scores = logits_processor(input_ids, next_token_logits)
@@ -2778,7 +2758,7 @@ class GenerationMixin:
                     scores=scores,
                     attentions=decoder_attentions,
                     hidden_states=decoder_hidden_states,
-                    critical_layer_dist=critical_layer_dist,
+                    premature_layer_dist=premature_layer_dist,
                 )
         else:
             return input_ids
@@ -2789,7 +2769,6 @@ class GenerationMixin:
         input_ids: torch.LongTensor,
         student_model: torch.nn.Module,
         relative_top: float = 0.1,
-        divergence_type: Optional[str] = None,
         logits_processor: Optional[LogitsProcessorList] = None,
         stopping_criteria: Optional[StoppingCriteriaList] = None,
         max_length: Optional[int] = None,
@@ -2940,12 +2919,6 @@ class GenerationMixin:
         unfinished_sequences = torch.ones(input_ids.shape[0], dtype=torch.long, device=input_ids.device)
 
         this_peer_finished = False  # used by synced_gpus only
-
-        debug = False
-        if debug:
-            from transformers import AutoTokenizer
-            tokenizer = AutoTokenizer.from_pretrained("huggyllama/llama-7b")
-            idx = 0
         
         student_model_kwargs = copy.deepcopy(model_kwargs)
         while True:
@@ -2988,30 +2961,6 @@ class GenerationMixin:
                 base_logits = base_logits.log_softmax(dim=-1)
                 mask = final_logits[0] < -1e3
                 base_logits[0][mask] = -1e3
-                if debug:
-                    # find the argmax token from (1) final_logits and (2) base_logits and (3) final_logits - base_logits
-                    argmax_final = torch.argmax(final_logits[0], dim=-1).item()
-                    argmax_base = torch.argmax(base_logits[0], dim=-1).item()
-                    argmax_diff = torch.argmax(final_logits[0] - base_logits[0], dim=-1).item()
-                    # print(f"argmax_final: {argmax_final}, argmax_base: {argmax_base}, argmax_diff: {argmax_diff}")
-                    # print(f"base_logits: {base_logits.shape}, final_logits: {final_logits.shape}")
-                    # find the tokens with non-zero probability
-                    base_tokens = torch.nonzero(final_logits[0].exp() > 0.0, as_tuple=True)
-                    final_tokens = torch.nonzero(final_logits[0].exp() > 0.0, as_tuple=True)
-                    raw_base_tokens = tokenizer.convert_ids_to_tokens(base_tokens[0])
-                    raw_final_tokens = tokenizer.convert_ids_to_tokens(final_tokens[0])
-                    # print logits with tokens one by one
-                    print("---", idx, "---")
-                    for i in range(len(base_tokens[0])):
-                        post_fix = ''
-                        if final_tokens[0][i] == argmax_final:
-                            post_fix += ' (expert)'
-                        if base_tokens[0][i] == argmax_base:
-                            post_fix += ' (student)'
-                        if base_tokens[0][i] == argmax_diff:
-                            post_fix += ' (diff)'
-                        print(f"{raw_base_tokens[i]}{' '*(10-len(raw_base_tokens[i]))}: final:{final_logits[0][final_tokens[0][i]].item():.2f}, base:{base_logits[0][base_tokens[0][i]].item():.2f}; diff:{(final_logits[0][final_tokens[0][i]] - base_logits[0][base_tokens[0][i]]).item():.2f} {post_fix}")
-                    idx += 1
             logits = final_logits - base_logits
             next_token_logits = logits
 
@@ -3372,15 +3321,13 @@ class GenerationMixin:
             return input_ids
 
 
-    def early_exit_contrastive_sample(
+    def dola_sample(
         self,
         input_ids: torch.LongTensor,
-        final_layer: int,
+        mature_layer: int,
         base_layer: Optional[int] = None,
-        dynamic_exit_layers: Optional[List[int]] = None,
+        candidate_premature_layers: Optional[List[int]] = None,
         relative_top: float = 0.1,
-        divergence_type: Optional[str] = None,
-        skip_layer0: Optional[bool] = None,
         logits_processor: Optional[LogitsProcessorList] = None,
         stopping_criteria: Optional[StoppingCriteriaList] = None,
         logits_warper: Optional[LogitsProcessorList] = None,
@@ -3566,16 +3513,16 @@ class GenerationMixin:
             # prepare model inputs
             model_inputs = self.prepare_inputs_for_generation(input_ids, **model_kwargs)
 
-            if base_layer is not None and dynamic_exit_layers is None:
-                early_exit_layers = [base_layer, final_layer]
+            if base_layer is not None and candidate_premature_layers is None:
+                early_exit_layers = [base_layer, mature_layer]
                 num_base_layers = 1
-                critical_layer_dist = {}
-            elif dynamic_exit_layers is not None:
-                early_exit_layers = dynamic_exit_layers + [final_layer]
-                num_base_layers = len(dynamic_exit_layers)
-                critical_layer_dist = {l:0 for l in dynamic_exit_layers}
+                premature_layer_dist = {}
+            elif candidate_premature_layers is not None:
+                early_exit_layers = candidate_premature_layers + [mature_layer]
+                num_base_layers = len(candidate_premature_layers)
+                premature_layer_dist = {l:0 for l in candidate_premature_layers}
             else:
-                raise ValueError("You must specify either `base_layer` or `dynamic_exit_layers`")
+                raise ValueError("You must specify either `base_layer` or `candidate_premature_layers`")
             
             # forward pass to get next token
             dict_outputs, outputs = self(
@@ -3590,7 +3537,7 @@ class GenerationMixin:
                 continue  # don't waste resources running the code we don't need
             if base_layer is not None:
                 base_logits = dict_outputs[base_layer]
-                final_logits = dict_outputs[final_layer]
+                final_logits = dict_outputs[mature_layer]
                 if relative_top > 0.0:
                     final_logits = self.relative_top_filter(final_logits, relative_top)
                     base_logits = base_logits.log_softmax(dim=-1)
@@ -3599,24 +3546,21 @@ class GenerationMixin:
                 logits = final_logits - base_logits
                 next_token_logits = logits[:, -1, :]
             else:
-                kl_divs = torch.stack(
-                    [0.5 * F.kl_div(F.log_softmax(dict_outputs[final_layer][:, -1, :], dim=-1), F.softmax(dict_outputs[i][:, -1, :], dim=-1), reduction='batchmean') + 0.5 * F.kl_div(F.log_softmax(dict_outputs[i][:, -1, :], dim=-1), F.softmax(dict_outputs[final_layer][:, -1, :], dim=-1), reduction='batchmean') for i in dynamic_exit_layers]
+                js_divs = torch.stack(
+                    [0.5 * F.kl_div(F.log_softmax(dict_outputs[mature_layer][:, -1, :], dim=-1), F.softmax(dict_outputs[i][:, -1, :], dim=-1), reduction='batchmean') + 0.5 * F.kl_div(F.log_softmax(dict_outputs[i][:, -1, :], dim=-1), F.softmax(dict_outputs[mature_layer][:, -1, :], dim=-1), reduction='batchmean') for i in candidate_premature_layers]
                 ).squeeze(-1)
-                critical_layer = dynamic_exit_layers[int(kl_divs.argmax().cpu().item())]
-                critical_layer_dist[critical_layer] += 1
+                premature_layer = candidate_premature_layers[int(js_divs.argmax().cpu().item())]
+                premature_layer_dist[premature_layer] += 1
                 
-                if skip_layer0 and critical_layer == 0:
-                    next_token_logits = dict_outputs[final_layer][:, -1, :]
-                else:
-                    base_logits = dict_outputs[critical_layer][:, -1, :]
-                    final_logits = dict_outputs[final_layer][:, -1, :]
-                    if relative_top > 0.0:
-                        final_logits = self.relative_top_filter(final_logits, relative_top)
-                        base_logits = base_logits.log_softmax(dim=-1)
-                        mask = final_logits[0] < -1e3
-                        base_logits[0][mask] = -1e3
-                    logits = final_logits - base_logits
-                    next_token_logits = logits
+                base_logits = dict_outputs[premature_layer][:, -1, :]
+                final_logits = dict_outputs[mature_layer][:, -1, :]
+                if relative_top > 0.0:
+                    final_logits = self.relative_top_filter(final_logits, relative_top)
+                    base_logits = base_logits.log_softmax(dim=-1)
+                    mask = final_logits[0] < -1e3
+                    base_logits[0][mask] = -1e3
+                logits = final_logits - base_logits
+                next_token_logits = logits
 
             # pre-process distribution
             next_token_scores = logits_processor(input_ids, next_token_logits)
@@ -3691,7 +3635,7 @@ class GenerationMixin:
                     scores=scores,
                     attentions=decoder_attentions,
                     hidden_states=decoder_hidden_states,
-                    critical_layer_dist=critical_layer_dist,
+                    premature_layer_dist=premature_layer_dist,
                 )
         else:
             return input_ids

@@ -14,7 +14,7 @@ import argparse
 import ssl
 import urllib.request
 
-from open_ended_contrastive_early_exit import OpenEndedContrastiveEarlyExit
+from dola import DoLa
 
 transformers.logging.set_verbosity(40)
 
@@ -139,26 +139,14 @@ def set_seed(seed):
     torch.cuda.manual_seed(seed)
 
 if __name__ == "__main__":
-    # init_cfg = global_cfg.clone()
-    # args = parse_args()
-
-    # if args.cfg_file:
-    #     init_cfg.merge_from_file(args.cfg_file)
-    # cfg_opt, client_cfg_opt = parse_client_cfg(args.opts)
-    # init_cfg.merge_from_list(cfg_opt)
-
-    # update_logger(init_cfg, clear_before_add=True)
-    # setup_seed(init_cfg.seed)
-
     parser = argparse.ArgumentParser()
-    parser.add_argument("--model-name", type=str, default="facebook/opt-350m")
+    parser.add_argument("--model-name", type=str, default="huggyllama/llama-7b")
     parser.add_argument("--num-gpus", type=str, default="1")
     parser.add_argument("--device", type=str, choices=["cuda", "cpu"], default="cuda")
     parser.add_argument("--data-path", type=str, default="./gsm8k")
     parser.add_argument("--output-path", type=str, default="./gsm8k_result")
     # parallel mode (split the dataset into multiple parts, inference by separate processes)
     parser.add_argument("--early-exit-layers", type=str, default="-1")
-    parser.add_argument("--divergence-type", type=str, default="js")
     parser.add_argument("--parallel", action="store_true")
     parser.add_argument("--total-shard", type=int, default=8)
     parser.add_argument("--shard-id", type=int, default=None)
@@ -173,16 +161,12 @@ if __name__ == "__main__":
     parser.add_argument("--do_sample", action="store_true")
     parser.add_argument("--do_shuffle", action="store_true")
     parser.add_argument("--debug", action="store_true")
-    parser.add_argument("--penalty_alpha", type=float, default=None)
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--retry", type=int, default=1)
     args = parser.parse_args()
     model_name = args.model_name
     num_gpus = args.num_gpus
     device = args.device
-
-    # load your finetuned model (saved as xxx.ckpt)
-    #    in yaml file federate.save_to
 
     # Get test file
     fp = args.data_path
@@ -198,28 +182,28 @@ if __name__ == "__main__":
     if args.debug:
         list_data_dict = list_data_dict[:10]
     
-    llm = OpenEndedContrastiveEarlyExit(model_name, device, num_gpus)
+    llm = DoLa(model_name, device, num_gpus)
     llm.set_stop_words(["Q:", "\end{code}"])
     early_exit_layers = [int(x) for x in args.early_exit_layers.split(',')]
-    if early_exit_layers == [-1]:
+    if len(early_exit_layers) == 1:
         print("MODE: naive decoding from the last layer", flush=True)
-        mode = "vanilla"
-        final_layer = None
-        base_layer = None
-        dynamic_exit_layers = None
+        mode = "baseline"
+        mature_layer = None
+        premature_layer = None
+        candidate_premature_layers = None
     elif len(early_exit_layers) == 2:
         print(f"MODE: early exit contrastive with final layer: {early_exit_layers[1]} and base layer: {early_exit_layers[0]}")
-        mode = "early_exit_contrastive"
-        final_layer = early_exit_layers[1]
-        base_layer = early_exit_layers[0]
-        dynamic_exit_layers = None
+        mode = "dola-static"
+        mature_layer = early_exit_layers[1]
+        premature_layer = early_exit_layers[0]
+        candidate_premature_layers = None
     else:
         print(f"MODE: dynamic early exit contrastive with final layer: {early_exit_layers[-1]} and base layers: {early_exit_layers[:-1]}")
-        mode = "dynamic_early_exit_contrastive"
-        final_layer = early_exit_layers[-1]
-        base_layer = None
-        dynamic_exit_layers = early_exit_layers[:-1]
-        critical_layer_dist = {l:0 for l in dynamic_exit_layers}
+        mode = "dola"
+        mature_layer = early_exit_layers[-1]
+        premature_layer = None
+        candidate_premature_layers = early_exit_layers[:-1]
+        premature_layer_dist = {l:0 for l in candidate_premature_layers}
     answers = []
     result_dict = {'is_correct': [], 'model_answer': [], 'model_completion': [], 'full_input_text': []}
     for sample in tqdm(list_data_dict):
@@ -229,18 +213,17 @@ if __name__ == "__main__":
         for i in range(3):
             answers_false.append(' ' + sample[f'contradiction_{i}'])
         # generate_kwargs = dict(max_new_tokens=256, top_p=0.95, temperature=0.8)
-        # generate_kwargs = dict(max_new_tokens=256, top_p=0.95, temperature=0.8, mode=mode, final_layer=final_layer, base_layer=base_layer, base_layers=dynamic_exit_layers, divergence_type=args.divergence_type)
-        generate_kwargs = dict(max_new_tokens=args.max_new_tokens, penalty_alpha=args.penalty_alpha, do_sample=args.do_sample, top_p=args.top_p, top_k=args.top_k, temperature=args.temperature, repetition_penalty=args.repetition_penalty, mode=mode, final_layer=final_layer, base_layer=base_layer, base_layers=dynamic_exit_layers, divergence_type=args.divergence_type, relative_top=args.relative_top, relative_top_with_norm=args.relative_top_with_norm, relative_top_value=args.relative_top_value)
+        generate_kwargs = dict(max_new_tokens=args.max_new_tokens, do_sample=args.do_sample, top_p=args.top_p, top_k=args.top_k, temperature=args.temperature, repetition_penalty=args.repetition_penalty, mode=mode, mature_layer=mature_layer, premature_layer=premature_layer, candidate_premature_layers=candidate_premature_layers, relative_top=args.relative_top, relative_top_with_norm=args.relative_top_with_norm, relative_top_value=args.relative_top_value)
         answer_true_log_prob, c_dist = llm.lm_score(context, answer_true, **generate_kwargs)
-        if mode == "dynamic_early_exit_contrastive":
+        if mode == "dola":
             for k, v in c_dist.items():
-                critical_layer_dist[k] += v
+                premature_layer_dist[k] += v
         answer_false_log_probs = []
         for answer_false in answers_false:
             answer_false_log_prob, c_dist = llm.lm_score(context, answer_false, **generate_kwargs)
-            if mode == "dynamic_early_exit_contrastive":
+            if mode == "dola":
                 for k, v in c_dist.items():
-                    critical_layer_dist[k] += v
+                    premature_layer_dist[k] += v
             answer_false_log_probs.append(answer_false_log_prob)
         if args.debug:
             print(f'log prob of answers: {answer_true_log_prob}', end=' ')
@@ -265,11 +248,11 @@ if __name__ == "__main__":
             f'correct num: {sum(answers)}, '
             f'correct rate: {float(sum(answers))/len(answers)}.')
 
-    if mode == "dynamic_early_exit_contrastive":
-        total_tokens = sum(critical_layer_dist.values())
+    if mode == "dola":
+        total_tokens = sum(premature_layer_dist.values())
         if total_tokens > 0:
-            for l in dynamic_exit_layers:
-                print('Critical layer {0} was used {1} times, {2}%'.format(l, critical_layer_dist[l], round(critical_layer_dist[l] / total_tokens * 100, 2)))
+            for l in candidate_premature_layers:
+                print('Premature layer {0} was used {1} times, {2}%'.format(l, premature_layer_dist[l], round(premature_layer_dist[l] / total_tokens * 100, 2)))
     # save results to a json file
     model_tag = model_name.split('/')[-1] if model_name[-1] != '/' else model_name.split('/')[-2]
     output_file = args.output_path if args.shard_id is None else (args.output_path+"_"+str(args.shard_id)+".jsonl")

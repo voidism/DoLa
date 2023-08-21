@@ -17,7 +17,7 @@ import ssl
 import urllib.request
 import zipfile
 
-from open_ended_contrastive_early_exit import OpenEndedContrastiveEarlyExit
+from dola import DoLa
 
 transformers.logging.set_verbosity(40)
 
@@ -94,26 +94,6 @@ def is_correct(model_answer, answer):
     gt_answer = answer
     assert gt_answer != INVALID_ANS
     return model_answer == gt_answer
-
-'''
-Q: Do hamsters provide food for any animals?
-A: Hamsters are prey animals. Prey are food for predators. Thus, hamsters provide food for some animals. So the answer is yes.
-
-Q: Could Brooke Shields succeed at University of Pennsylvania?
-A: Brooke Shields went to Princeton University. Princeton University is about as academically rigorous as the University of Pennsylvania. Thus, Brooke Shields could also succeed at the University of Pennsylvania. So the answer is yes.
-
-Q: Yes or no: Hydrogen's atomic number squared exceeds number of Spice Girls?
-A: Hydrogen has an atomic number of 1. 1 squared is 1. There are 5 Spice Girls. Thus, Hydrogen's atomic number squared is less than 5. So the answer is no.
-
-Q: Yes or no: Is it common to see frost during some college commencements?
-A: College commencement ceremonies can happen in December, May, and June. December is in the winter, so there can be frost. Thus, there could be frost at some commencements. So the answer is yes.
-
-Q: Yes or no: Could a llama birth twice during War in Vietnam (1945-46)?
-A: The War in Vietnam was 6 months. The gestation period for a llama is 11 months, which is more than 6 months. Thus, a llama could not give birth twice during the War in Vietnam. So the answer is no.
-
-Q: Yes or no: Would a pear sink in water?
-A: The density of a pear is about 0.6 g/cm^3, which is less than water. Objects less dense than water float. Thus, a pear would float. So the answer is no.
-'''
 
 def create_demo_text(n_shot=6, cot_flag=True, shuffle=False):
     question, chain, answer = [], [], []
@@ -200,14 +180,13 @@ def maj_vote(preds):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--model-name", type=str, default="facebook/opt-350m")
+    parser.add_argument("--model-name", type=str, default="huggyllama/llama-7b")
     parser.add_argument("--num-gpus", type=str, default="1")
     parser.add_argument("--device", type=str, choices=["cuda", "cpu"], default="cuda")
     parser.add_argument("--data-path", type=str, default="./strqa")
     parser.add_argument("--output-path", type=str, default="./strqa_result")
     # parallel mode (split the dataset into multiple parts, inference by separate processes)
     parser.add_argument("--early-exit-layers", type=str, default="-1")
-    parser.add_argument("--divergence-type", type=str, default="js")
     parser.add_argument("--parallel", action="store_true")
     parser.add_argument("--total-shard", type=int, default=8)
     parser.add_argument("--shard-id", type=int, default=None)
@@ -219,7 +198,6 @@ if __name__ == "__main__":
     parser.add_argument("--relative_top", type=float, default=0.1)
     parser.add_argument("--do_sample", action="store_true")
     parser.add_argument("--do_shuffle", action="store_true")
-    parser.add_argument("--penalty_alpha", type=float, default=None)
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--retry", type=int, default=1)
     # majority vote
@@ -276,14 +254,6 @@ if __name__ == "__main__":
             is_cor = is_correct(maj_model_answer, list_data_dict[i]['answer'])
             answers.append(is_cor)
             result_dict['is_correct'].append(is_cor)
-            # print(f'Question: {sample["question"]}\n\n'
-            #     f'Answers: {sample["answer"]}\n\n'
-            #     f'Model Answers: {maj_model_answer}\n\n'
-            #     f'Is correct: {is_cor}\n\n')
-
-            # print(f'Num of total question: {len(answers)}, '
-            #     f'correct num: {sum(answers)}, '
-            #     f'correct rate: {float(sum(answers))/len(answers)}.')
         print(f'Num of total question: {len(answers)}, '
             f'correct num: {sum(answers)}, '
             f'correct rate: {float(sum(answers))/len(answers)}.')
@@ -296,29 +266,29 @@ if __name__ == "__main__":
         chunk_size = len(list_data_dict) // args.total_shard
         list_data_dict = list_data_dict[args.shard_id * chunk_size: (args.shard_id + 1) * chunk_size]
     
-    llm = OpenEndedContrastiveEarlyExit(model_name, device, num_gpus)
+    llm = DoLa(model_name, device, num_gpus)
     stop_word_list = ["Q:", "\n\n##"]
     llm.set_stop_words(stop_word_list)
     early_exit_layers = [int(x) for x in args.early_exit_layers.split(',')]
-    if early_exit_layers == [-1]:
+    if len(early_exit_layers) == 1:
         print("MODE: naive decoding from the last layer", flush=True)
-        mode = "vanilla"
-        final_layer = None
-        base_layer = None
-        dynamic_exit_layers = None
+        mode = "baseline"
+        mature_layer = None
+        premature_layer = None
+        candidate_premature_layers = None
     elif len(early_exit_layers) == 2:
         print(f"MODE: early exit contrastive with final layer: {early_exit_layers[1]} and base layer: {early_exit_layers[0]}")
-        mode = "early_exit_contrastive"
-        final_layer = early_exit_layers[1]
-        base_layer = early_exit_layers[0]
-        dynamic_exit_layers = None
+        mode = "dola-static"
+        mature_layer = early_exit_layers[1]
+        premature_layer = early_exit_layers[0]
+        candidate_premature_layers = None
     else:
         print(f"MODE: dynamic early exit contrastive with final layer: {early_exit_layers[-1]} and base layers: {early_exit_layers[:-1]}")
-        mode = "dynamic_early_exit_contrastive"
-        final_layer = early_exit_layers[-1]
-        base_layer = None
-        dynamic_exit_layers = early_exit_layers[:-1]
-        critical_layer_dist = {l:0 for l in dynamic_exit_layers}
+        mode = "dola"
+        mature_layer = early_exit_layers[-1]
+        premature_layer = None
+        candidate_premature_layers = early_exit_layers[:-1]
+        premature_layer_dist = {l:0 for l in candidate_premature_layers}
     answers = []
     result_dict = {'is_correct': [], 'model_answer': [], 'model_completion': [], 'full_input_text': []}
     retry_times = args.retry
@@ -326,17 +296,16 @@ if __name__ == "__main__":
         model_answer = None
         for i in range(retry_times):
             input_text = build_prompt(sample['question'], N_SHOT, COT_FLAG, args.do_shuffle)
-            # generate_kwargs = dict(max_new_tokens=256, top_p=0.95, temperature=0.8)
-            generate_kwargs = dict(max_new_tokens=args.max_new_tokens, penalty_alpha=args.penalty_alpha, do_sample=args.do_sample, top_p=args.top_p, top_k=args.top_k, temperature=args.temperature, repetition_penalty=args.repetition_penalty, mode=mode, final_layer=final_layer, base_layer=base_layer, base_layers=dynamic_exit_layers, divergence_type=args.divergence_type, relative_top=args.relative_top)
+            generate_kwargs = dict(max_new_tokens=args.max_new_tokens, do_sample=args.do_sample, top_p=args.top_p, top_k=args.top_k, temperature=args.temperature, repetition_penalty=args.repetition_penalty, mode=mode, mature_layer=mature_layer, premature_layer=premature_layer, candidate_premature_layers=candidate_premature_layers, relative_top=args.relative_top)
             model_completion, c_dist = llm.generate(input_text, **generate_kwargs)
             for stop_word in stop_word_list:
                 length_to_remove = len(stop_word)
                 if model_completion[-length_to_remove:] == stop_word:
                     model_completion = model_completion[:-length_to_remove]
             model_completion = model_completion.strip()
-            if mode == "dynamic_early_exit_contrastive":
+            if mode == "dola":
                 for k, v in c_dist.items():
-                    critical_layer_dist[k] += v
+                    premature_layer_dist[k] += v
             model_answer = clean_answer(model_completion, random_guess = (i == retry_times - 1))
             if model_answer is not None:
                 break
@@ -358,11 +327,11 @@ if __name__ == "__main__":
             f'correct num: {sum(answers)}, '
             f'correct rate: {float(sum(answers))/len(answers)}.')
 
-    if mode == "dynamic_early_exit_contrastive":
-        total_tokens = sum(critical_layer_dist.values())
+    if mode == "dola":
+        total_tokens = sum(premature_layer_dist.values())
         if total_tokens > 0:
-            for l in dynamic_exit_layers:
-                print('Critical layer {0} was used {1} times, {2}%'.format(l, critical_layer_dist[l], round(critical_layer_dist[l] / total_tokens * 100, 2)))
+            for l in candidate_premature_layers:
+                print('Premature layer {0} was used {1} times, {2}%'.format(l, premature_layer_dist[l], round(premature_layer_dist[l] / total_tokens * 100, 2)))
     # save results to a json file
     model_tag = model_name.split('/')[-1] if model_name[-1] != '/' else model_name.split('/')[-2]
     output_file = args.output_path if args.shard_id is None else (args.output_path+"_"+str(args.shard_id)+".jsonl")

@@ -15,7 +15,7 @@ import warnings
 import pandas as pd
 import numpy as np
 
-class OpenEndedContrastiveEarlyExit:
+class DoLa:
     def __init__(self, model_name, device, num_gpus):
         self.model_name = model_name
         self.device = device
@@ -60,32 +60,31 @@ class OpenEndedContrastiveEarlyExit:
             print("Added stop word: ", stop_word, 'with the ids', stop_word_ids, flush=True)
         self.stopping_criteria.append(LLamaQaStoppingCriteria(list_stop_word_ids))
 
-    def generate(self, input_text, max_new_tokens=256, top_p=0.95, top_k=0, temperature=0.8, final_layer=None, base_layer=None, base_layers=[], divergence_type='js', mode='vanilla', verbose=True, remove_stop_words=False, skip_layer0=False, relative_top=0.1, **kwargs):
+    def generate(self, input_text, max_new_tokens=256, top_p=0.95, top_k=0, temperature=0.8, mature_layer=None, premature_layer=None, candidate_premature_layers=[], mode='baseline', verbose=True, remove_stop_words=False, relative_top=0.1, **kwargs):
         with torch.no_grad():
 
             input_ids = self.tokenizer(input_text, return_tensors="pt").input_ids.to(self.device)
             max_len = input_ids.shape[-1] + max_new_tokens
 
-            if mode == 'vanilla':
+            if mode == 'baseline':
                 outputs = self.model.generate(input_ids, max_length=max_len, num_return_sequences=1,
-                                    output_scores=True, return_dict_in_generate=True, early_exit_contrastive_decoding=False,
+                                    output_scores=True, return_dict_in_generate=True, dola_decoding=False,
                                     top_p=top_p, top_k=top_k, temperature=temperature, stopping_criteria=self.stopping_criteria, **kwargs)
-            elif mode == 'early_exit_contrastive':
-                assert final_layer is not None, "final_layer must be specified"
-                assert base_layer is not None, "base_layer must be specified"
+            elif mode == 'dola-static':
+                assert mature_layer is not None, "mature_layer must be specified"
+                assert premature_layer is not None, "premature_layer must be specified"
                 outputs = self.model.generate(input_ids, max_length=max_len, num_return_sequences=1,
-                                    output_scores=True, return_dict_in_generate=True, early_exit_contrastive_decoding=True,
-                                    final_layer=final_layer, base_layer=base_layer,
-                                    top_p=top_p, top_k=top_k, temperature=temperature, stopping_criteria=self.stopping_criteria, skip_layer0=skip_layer0, relative_top=relative_top, **kwargs)
-            elif mode == 'dynamic_early_exit_contrastive':
-                assert final_layer is not None, "final_layer must be specified"
-                assert base_layers is not None, "base_layers must be specified"
+                                    output_scores=True, return_dict_in_generate=True, dola_decoding=True,
+                                    mature_layer=mature_layer, premature_layer=premature_layer,
+                                    top_p=top_p, top_k=top_k, temperature=temperature, stopping_criteria=self.stopping_criteria, relative_top=relative_top, **kwargs)
+            elif mode == 'dola':
+                assert mature_layer is not None, "mature_layer must be specified"
+                assert candidate_premature_layers is not None, "candidate_premature_layers must be specified"
                 outputs = self.model.generate(input_ids, max_length=max_len, num_return_sequences=1,
-                                        output_scores=True, return_dict_in_generate=True, early_exit_contrastive_decoding=True,
-                                        top_p=top_p, top_k=top_k, temperature=temperature, stopping_criteria=self.stopping_criteria, skip_layer0=skip_layer0, relative_top=relative_top, 
-                                        final_layer=final_layer, base_layer=None, dynamic_exit_layers=base_layers,
-                                        divergence_type=divergence_type, **kwargs,)
-                critical_layer_dist = outputs.critical_layer_dist
+                                        output_scores=True, return_dict_in_generate=True, dola_decoding=True,
+                                        top_p=top_p, top_k=top_k, temperature=temperature, stopping_criteria=self.stopping_criteria, relative_top=relative_top, 
+                                        mature_layer=mature_layer, premature_layer=None, candidate_premature_layers=candidate_premature_layers, **kwargs,)
+                premature_layer_dist = outputs.premature_layer_dist
             sequences, scores = outputs.sequences, outputs.scores
 
             # skip the tokens in the input prompt
@@ -107,7 +106,7 @@ class OpenEndedContrastiveEarlyExit:
         if self.device:
             torch.cuda.empty_cache()
 
-        return output_str, (critical_layer_dist if mode == 'dynamic_early_exit_contrastive' else None)
+        return output_str, (premature_layer_dist if mode == 'dola' else None)
 
     def get_relative_top_filter(self, scores: torch.FloatTensor, relative_top: float = 0.1, min_tokens_to_keep: int = 1):
         scores_normalized = scores.log_softmax(dim=-1) 
@@ -119,13 +118,13 @@ class OpenEndedContrastiveEarlyExit:
         probs_thresh = probs_thresh.unsqueeze(-1)
         return scores_normalized < probs_thresh
 
-    def lm_score(self, input_text1, input_text2, pmi=False, max_new_tokens=256, top_p=0.95, top_k=0, temperature=0.8, final_layer=None, base_layer=None, base_layers=[], divergence_type='js', mode='vanilla', verbose=True, remove_stop_words=False, skip_layer0=False, relative_top=0.1, relative_top_value=-1000.0, **kwargs):
+    def lm_score(self, input_text1, input_text2, pmi=False, max_new_tokens=256, top_p=0.95, top_k=0, temperature=0.8, mature_layer=None, premature_layer=None, candidate_premature_layers=[], mode='baseline', verbose=True, remove_stop_words=False, relative_top=0.1, relative_top_value=-1000.0, **kwargs):
         with torch.no_grad():
             input_text = input_text1 + input_text2
             input_ids = self.tokenizer(input_text, return_tensors="pt").input_ids.to(self.device)
             prefix_ids = self.tokenizer(input_text1, return_tensors="pt").input_ids.to(self.device)
             continue_ids = input_ids[0, prefix_ids.shape[-1]:]
-            if mode == 'vanilla':
+            if mode == 'baseline':
                 outputs = self.model(input_ids)[0].squeeze(0)
                 outputs = outputs.log_softmax(-1)  # logits to log probs
 
@@ -142,18 +141,18 @@ class OpenEndedContrastiveEarlyExit:
                     log_probs_y = outputs_y[range(outputs_y.shape[0]), continue_ids].sum().item()
                     log_probs = log_probs - log_probs_y
                 
-            elif mode == 'early_exit_contrastive':
+            elif mode == 'dola-static':
                 dict_outputs, outputs = self.model(
                     input_ids=input_ids,
                     return_dict=True,
                     output_attentions=False,
                     output_hidden_states=False,
-                    early_exit_layers=[base_layer, final_layer],
+                    early_exit_layers=[premature_layer, mature_layer],
                 )
 
-                assert base_layer is not None
-                base_logits = dict_outputs[base_layer][0, prefix_ids.shape[-1] - 1: -1, :]
-                final_logits = dict_outputs[final_layer][0, prefix_ids.shape[-1] - 1: -1, :]
+                assert premature_layer is not None
+                base_logits = dict_outputs[premature_layer][0, prefix_ids.shape[-1] - 1: -1, :]
+                final_logits = dict_outputs[mature_layer][0, prefix_ids.shape[-1] - 1: -1, :]
                 final_logits = final_logits.log_softmax(dim=-1)
                 base_logits = base_logits.log_softmax(dim=-1)
                 diff_logits = final_logits - base_logits
@@ -170,10 +169,10 @@ class OpenEndedContrastiveEarlyExit:
                         return_dict=True,
                         output_attentions=False,
                         output_hidden_states=False,
-                        early_exit_layers=[base_layer, final_layer],
+                        early_exit_layers=[premature_layer, mature_layer],
                     )
-                    base_logits_y = dict_outputs_y[base_layer][0, :, :]
-                    final_logits_y = dict_outputs_y[final_layer][0, :, :]
+                    base_logits_y = dict_outputs_y[premature_layer][0, :, :]
+                    final_logits_y = dict_outputs_y[mature_layer][0, :, :]
                     final_logits_y = final_logits_y.log_softmax(dim=-1)
                     base_logits_y = base_logits_y.log_softmax(dim=-1)
                     diff_logits_y = final_logits_y - base_logits_y
@@ -184,86 +183,34 @@ class OpenEndedContrastiveEarlyExit:
                     log_probs_y = diff_logits_y[range(diff_logits_y.shape[0]), continue_ids].sum().item()
                     log_probs = log_probs - log_probs_y
 
-            elif mode == 'early_exit_contrastive_exploit':
-                dict_outputs, outputs = self.model(
-                    input_ids=input_ids,
-                    return_dict=True,
-                    output_attentions=False,
-                    output_hidden_states=False,
-                    early_exit_layers=base_layers + [final_layer],
-                )
-
-                return_dict = {}
-                for base_layer in base_layers:
-                    base_logits = dict_outputs[base_layer][0, prefix_ids.shape[-1] - 1: -1, :]
-                    final_logits = dict_outputs[final_layer][0, prefix_ids.shape[-1] - 1: -1, :]
-                    final_logits = final_logits.log_softmax(dim=-1)
-                    base_logits = base_logits.log_softmax(dim=-1)
-                    diff_logits = final_logits - base_logits
-                    if relative_top > 0.0:
-                        relative_top_mask = self.get_relative_top_filter(final_logits, relative_top)
-                        diff_logits = torch.where(relative_top_mask, relative_top_value, diff_logits)
-                        
-                    log_probs = diff_logits[range(diff_logits.shape[0]), continue_ids].sum().item()
-
-                    # pmi
-                    if pmi:
-                        dict_outputs_y, outputs_y = self.model(
-                            input_ids=input_ids[:, prefix_ids.shape[-1]-1:],
-                            return_dict=True,
-                            output_attentions=False,
-                            output_hidden_states=False,
-                            early_exit_layers=[base_layer, final_layer],
-                        )
-                        base_logits_y = dict_outputs_y[base_layer][0, :, :]
-                        final_logits_y = dict_outputs_y[final_layer][0, :, :]
-                        final_logits_y = final_logits_y.log_softmax(dim=-1)
-                        base_logits_y = base_logits_y.log_softmax(dim=-1)
-                        diff_logits_y = final_logits_y - base_logits_y
-                        if relative_top > 0.0:
-                            relative_top_mask = self.get_relative_top_filter(final_logits_y, relative_top)
-                            diff_logits_y = torch.where(relative_top_mask, relative_top_value, diff_logits_y)
-                        diff_logits_y = diff_logits_y.log_softmax(dim=-1)
-                        log_probs_y = diff_logits_y[range(diff_logits_y.shape[0]), continue_ids].sum().item()
-                        log_probs = log_probs - log_probs_y
-
-                    return_dict[base_layer] = log_probs
-                log_probs = return_dict
-
-            elif mode == 'dynamic_early_exit_contrastive':
-                critical_layer_dist = {l:0 for l in base_layers}
+            elif mode == 'dola':
+                premature_layer_dist = {l:0 for l in candidate_premature_layers}
                 picked_logits = []
                 result_dict = {}
-                critical_layers = []
+                premature_layers = []
 
                 dict_outputs, outputs = self.model(
                     input_ids=input_ids,
                     return_dict=True,
                     output_attentions=False,
                     output_hidden_states=False,
-                    early_exit_layers=base_layers + [final_layer],
+                    early_exit_layers=candidate_premature_layers + [mature_layer],
                 )
 
                 for seq_i in range(prefix_ids.shape[-1] - 1, input_ids.shape[-1] - 1):
                     # pick the less like layer to contrast with
-                    kl_divs = torch.stack(
-                        # reverse KL-divergence
-                        [F.kl_div(F.log_softmax(dict_outputs[i][:, seq_i, :], dim=-1), F.softmax(dict_outputs[final_layer][:, seq_i, :], dim=-1), reduction='batchmean') for i in base_layers] if divergence_type == 'rev_kl' else (
-                        # KL-divergence
-                        [F.kl_div(F.log_softmax(dict_outputs[final_layer][:, seq_i, :], dim=-1), F.softmax(dict_outputs[i][:, seq_i, :], dim=-1), reduction='batchmean') for i in base_layers] if divergence_type == 'kl' else 
-                        # JS-divergence
-                        [0.5 * F.kl_div(F.log_softmax(dict_outputs[final_layer][:, seq_i, :], dim=-1), F.softmax(dict_outputs[i][:, seq_i, :], dim=-1), reduction='batchmean') + 0.5 * F.kl_div(F.log_softmax(dict_outputs[i][:, seq_i, :], dim=-1), F.softmax(dict_outputs[final_layer][:, seq_i, :], dim=-1), reduction='batchmean') for i in base_layers]
-                        )
+                    js_divs = torch.stack(
+                        [0.5 * F.kl_div(F.log_softmax(dict_outputs[mature_layer][:, seq_i, :], dim=-1), F.softmax(dict_outputs[i][:, seq_i, :], dim=-1), reduction='batchmean') + 0.5 * F.kl_div(F.log_softmax(dict_outputs[i][:, seq_i, :], dim=-1), F.softmax(dict_outputs[mature_layer][:, seq_i, :], dim=-1), reduction='batchmean') for i in candidate_premature_layers]
                     ).squeeze(-1)
-                    critical_layer = base_layers[int(kl_divs.argmax().cpu().item())]
-                    critical_layer_dist[critical_layer] += 1
+                    premature_layer = candidate_premature_layers[int(js_divs.argmax().cpu().item())]
+                    premature_layer_dist[premature_layer] += 1
 
-                    critical_layers.append(critical_layer)
+                    premature_layers.append(premature_layer)
 
-                base_logits = torch.zeros_like(dict_outputs[final_layer][0, prefix_ids.shape[-1] - 1:-1])
-                for i, l in enumerate(critical_layers):
+                base_logits = torch.zeros_like(dict_outputs[mature_layer][0, prefix_ids.shape[-1] - 1:-1])
+                for i, l in enumerate(premature_layers):
                    base_logits[i] = dict_outputs[l][0, prefix_ids.shape[-1] - 1 + i]
-                final_logits = dict_outputs[final_layer][0, prefix_ids.shape[-1] - 1:-1]
+                final_logits = dict_outputs[mature_layer][0, prefix_ids.shape[-1] - 1:-1]
                 final_logits = final_logits.log_softmax(dim=-1)
                 base_logits = base_logits.log_softmax(dim=-1)
                 diff_logits = final_logits - base_logits
@@ -274,4 +221,4 @@ class OpenEndedContrastiveEarlyExit:
                 
                 log_probs = diff_logits[range(diff_logits.shape[0]), continue_ids].sum().item()
 
-        return log_probs, (critical_layer_dist if mode == 'dynamic_early_exit_contrastive' else None)
+        return log_probs, (premature_layer_dist if mode == 'dola' else None)
