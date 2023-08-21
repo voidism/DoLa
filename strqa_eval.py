@@ -171,13 +171,6 @@ def set_seed(seed):
     torch.manual_seed(seed)
     torch.cuda.manual_seed(seed)
 
-def maj_vote(preds):
-    # if multiple most common classes, return a random selected one
-    cnt = Counter(preds)
-    max_cnt = max(cnt.values())
-    max_classes = [k for k, v in cnt.items() if v == max_cnt]
-    return random.choice(max_classes)
-
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--model-name", type=str, default="huggyllama/llama-7b")
@@ -200,9 +193,6 @@ if __name__ == "__main__":
     parser.add_argument("--do_shuffle", action="store_true")
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--retry", type=int, default=1)
-    # majority vote
-    parser.add_argument("--maj-vote", action="store_true")
-    parser.add_argument("--maj-vote-src-files", type=str, default=None)
     
     args = parser.parse_args()
     model_name = args.model_name
@@ -234,33 +224,6 @@ if __name__ == "__main__":
             zip_ref.extractall(args.data_path)
 
     list_data_dict = load_jsonl(fp)
-
-    if args.maj_vote:
-        pred_files = glob.glob(args.maj_vote_src_files)
-        predictions = []
-        for pred_file in pred_files:
-            pred = json.load(open(pred_file))
-            assert len(pred['model_answer']) == len(list_data_dict)
-            predictions.append(pred)
-
-        print(f'Num of models: {len(predictions)}')
-
-        result_dict = {'is_correct': []}
-        answers = []
-        for i in trange(len(list_data_dict)):
-            sample = list_data_dict[i]
-            pred_answers = [p['model_answer'][i] for p in predictions]
-            maj_model_answer = maj_vote(pred_answers)
-            is_cor = is_correct(maj_model_answer, list_data_dict[i]['answer'])
-            answers.append(is_cor)
-            result_dict['is_correct'].append(is_cor)
-        print(f'Num of total question: {len(answers)}, '
-            f'correct num: {sum(answers)}, '
-            f'correct rate: {float(sum(answers))/len(answers)}.')
-
-        print(f"{float(sum(answers))/len(answers)}")
-        sys.exit(0)
-
     
     if args.parallel:
         chunk_size = len(list_data_dict) // args.total_shard
@@ -277,13 +240,13 @@ if __name__ == "__main__":
         premature_layer = None
         candidate_premature_layers = None
     elif len(early_exit_layers) == 2:
-        print(f"MODE: early exit contrastive with final layer: {early_exit_layers[1]} and base layer: {early_exit_layers[0]}")
+        print(f"MODE: DoLa-static decoding with mature layer: {early_exit_layers[1]} and premature layer: {early_exit_layers[0]}")
         mode = "dola-static"
         mature_layer = early_exit_layers[1]
         premature_layer = early_exit_layers[0]
         candidate_premature_layers = None
     else:
-        print(f"MODE: dynamic early exit contrastive with final layer: {early_exit_layers[-1]} and base layers: {early_exit_layers[:-1]}")
+        print(f"MODE: DoLa decoding with mature layer: {early_exit_layers[-1]} and premature layers: {early_exit_layers[:-1]}")
         mode = "dola"
         mature_layer = early_exit_layers[-1]
         premature_layer = None
