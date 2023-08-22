@@ -191,6 +191,7 @@ if __name__ == "__main__":
     parser.add_argument("--relative_top", type=float, default=0.1)
     parser.add_argument("--do_sample", action="store_true")
     parser.add_argument("--do_shuffle", action="store_true")
+    parser.add_argument("--debug", action="store_true")
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--retry", type=int, default=1)
     
@@ -228,6 +229,9 @@ if __name__ == "__main__":
     if args.parallel:
         chunk_size = len(list_data_dict) // args.total_shard
         list_data_dict = list_data_dict[args.shard_id * chunk_size: (args.shard_id + 1) * chunk_size]
+    
+    if args.debug:
+        list_data_dict = list_data_dict[:10]
     
     llm = DoLa(model_name, device, num_gpus)
     stop_word_list = ["Q:", "\n\n##"]
@@ -297,7 +301,7 @@ if __name__ == "__main__":
                 print('Premature layer {0} was used {1} times, {2}%'.format(l, premature_layer_dist[l], round(premature_layer_dist[l] / total_tokens * 100, 2)))
     # save results to a json file
     model_tag = model_name.split('/')[-1] if model_name[-1] != '/' else model_name.split('/')[-2]
-    output_file = args.output_path if args.shard_id is None else (args.output_path+"_"+str(args.shard_id)+".jsonl")
+    output_file = args.output_path if args.shard_id is None else (args.output_path+"_"+str(args.shard_id)+".json")
     with open(output_file, 'w') as f:
         json.dump(result_dict, f)
     print(f"{float(sum(answers))/len(answers)}")
