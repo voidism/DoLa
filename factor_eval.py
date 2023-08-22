@@ -212,7 +212,6 @@ if __name__ == "__main__":
         answers_false = []
         for i in range(3):
             answers_false.append(' ' + sample[f'contradiction_{i}'])
-        # generate_kwargs = dict(max_new_tokens=256, top_p=0.95, temperature=0.8)
         generate_kwargs = dict(max_new_tokens=args.max_new_tokens, do_sample=args.do_sample, top_p=args.top_p, top_k=args.top_k, temperature=args.temperature, repetition_penalty=args.repetition_penalty, mode=mode, mature_layer=mature_layer, premature_layer=premature_layer, candidate_premature_layers=candidate_premature_layers, relative_top=args.relative_top, relative_top_with_norm=args.relative_top_with_norm, relative_top_value=args.relative_top_value)
         answer_true_log_prob, c_dist = llm.lm_score(context, answer_true, **generate_kwargs)
         if mode == "dola":
@@ -238,17 +237,12 @@ if __name__ == "__main__":
         answers.append(is_cor)
         result_dict['is_correct'].append(is_cor)
         result_dict['model_completion'].append([answer_true_log_prob] + answer_false_log_probs)
-        # print(f'Question: {sample["instruction"]}\n\n'
-        #     f'Answers: {extract_answer_from_output(sample["output"])}\n\n'
-        #     f'Model Answers: {model_answer}\n\n'
-        #     f'Model Completion: {model_completion}\n\n'
-        #     f'Is correct: {is_cor}\n\n')
 
         print(f'Num of total question: {len(answers)}, '
             f'correct num: {sum(answers)}, '
             f'correct rate: {float(sum(answers))/len(answers)}.')
 
-    if mode == "dola":
+    if mode == "dola" and args.debug:
         total_tokens = sum(premature_layer_dist.values())
         if total_tokens > 0:
             for l in candidate_premature_layers:

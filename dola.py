@@ -133,13 +133,6 @@ class DoLa:
 
                 # get logprobs for each token in the answer
                 log_probs = outputs[range(outputs.shape[0]), continue_ids].sum().item()
-
-                # pmi
-                if pmi:
-                    outputs_y = self.model(input_ids[:, prefix_ids.shape[-1]-1:])[0].squeeze(0)[:-1]
-                    outputs_y = outputs_y.log_softmax(-1)
-                    log_probs_y = outputs_y[range(outputs_y.shape[0]), continue_ids].sum().item()
-                    log_probs = log_probs - log_probs_y
                 
             elif mode == 'dola-static':
                 dict_outputs, outputs = self.model(
@@ -156,32 +149,12 @@ class DoLa:
                 final_logits = final_logits.log_softmax(dim=-1)
                 base_logits = base_logits.log_softmax(dim=-1)
                 diff_logits = final_logits - base_logits
+                diff_logits = diff_logits.log_softmax(dim=-1)
                 if relative_top > 0.0:
                     relative_top_mask = self.get_relative_top_filter(final_logits, relative_top)
                     diff_logits = torch.where(relative_top_mask, relative_top_value, diff_logits)
                     
                 log_probs = diff_logits[range(diff_logits.shape[0]), continue_ids].sum().item()
-
-                # pmi
-                if pmi:
-                    dict_outputs_y, outputs_y = self.model(
-                        input_ids=input_ids[:, prefix_ids.shape[-1]-1:],
-                        return_dict=True,
-                        output_attentions=False,
-                        output_hidden_states=False,
-                        early_exit_layers=[premature_layer, mature_layer],
-                    )
-                    base_logits_y = dict_outputs_y[premature_layer][0, :, :]
-                    final_logits_y = dict_outputs_y[mature_layer][0, :, :]
-                    final_logits_y = final_logits_y.log_softmax(dim=-1)
-                    base_logits_y = base_logits_y.log_softmax(dim=-1)
-                    diff_logits_y = final_logits_y - base_logits_y
-                    if relative_top > 0.0:
-                        relative_top_mask = self.get_relative_top_filter(final_logits_y, relative_top)
-                        diff_logits_y = torch.where(relative_top_mask, relative_top_value, diff_logits_y)
-                    # diff_logits_y = diff_logits_y.log_softmax(dim=-1)
-                    log_probs_y = diff_logits_y[range(diff_logits_y.shape[0]), continue_ids].sum().item()
-                    log_probs = log_probs - log_probs_y
 
             elif mode == 'dola':
                 premature_layer_dist = {l:0 for l in candidate_premature_layers}
@@ -214,6 +187,7 @@ class DoLa:
                 final_logits = final_logits.log_softmax(dim=-1)
                 base_logits = base_logits.log_softmax(dim=-1)
                 diff_logits = final_logits - base_logits
+                diff_logits = diff_logits.log_softmax(dim=-1)
 
                 if relative_top > 0.0:
                     relative_top_mask = self.get_relative_top_filter(final_logits, relative_top)

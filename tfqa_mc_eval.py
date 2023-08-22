@@ -340,7 +340,7 @@ if __name__ == "__main__":
                 f' MC3: {result_dict["total_mc3"]/len(result_dict["question"])}\n\n')
 
 
-    if mode == "dola":
+    if mode == "dola" and args.debug:
         total_tokens = sum(premature_layer_dist.values())
         if total_tokens > 0:
             for l in candidate_premature_layers:

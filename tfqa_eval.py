@@ -211,7 +211,7 @@ if __name__ == "__main__":
             f'Model Completion: {model_completion}\n\n')
 
         print(f'Num of total question: {len(answers)}.')
-    if mode == "dola":
+    if mode == "dola" and args.debug:
         total_tokens = sum(premature_layer_dist.values())
         if total_tokens > 0:
             for l in candidate_premature_layers:
