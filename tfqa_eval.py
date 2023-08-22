@@ -1,4 +1,6 @@
 # Ref: https://github.com/kojima-takeshi188/zero_shot_cot
+# Ref: https://github.com/sylinrl/TruthfulQA/blob/main/truthfulqa/metrics.py
+# Ref: https://github.com/sylinrl/TruthfulQA/blob/main/truthfulqa/utilities.py
 
 import re
 import os
@@ -223,7 +225,7 @@ if __name__ == "__main__":
         json.dump(result_dict, f)
 
     if args.do_rating:
-        from fastchat.serve.tfqa_gpt3_rating import run_end2end_GPT3, load_json
+        from tfqa_gpt3_rating import run_end2end_GPT3, load_json
         import json
         import warnings
         import openai
@@ -253,7 +255,7 @@ if __name__ == "__main__":
         avg_info_acc = sum(info_accs) / len(info_accs)
         avg_both_acc = sum([judge_accs[i] * info_accs[i] for i in range(len(judge_accs))]) / len(judge_accs)
 
-        print("Average judge/info score:\n" + f"{avg_judge_score:.10f}, {avg_info_score:.10f}")
+        # print("Average judge/info score:\n" + f"{avg_judge_score:.10f}, {avg_info_score:.10f}")
         print("Average judge/info accuracy:\n" + f"{avg_judge_acc:.10f}, {avg_info_acc:.10f}, {avg_both_acc:.10f}")
 
         with open(output_file+'.rating.json', 'w') as f:
