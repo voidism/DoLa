@@ -12,16 +12,15 @@ pip install accelerate
 pip install openai # -> only for truthfulqa and gpt4_eval
 ```
 
-## Run Experiments
-
+## Experiments
 
 ### Arguments
 
 | Argument        | Example           | Description   |
 | --------------- | ----------------- | ------------- |
-| `--model-name`  | `huggyllama/llama-7b` | Specifies the model you want to use |
-| `--data-path`   | `/path/to/dataset` | Path to the dataset file |
-| `--output-path` | `output-path.json` | Where to store the output results |
+| `--model-name`  | `huggyllama/llama-7b` | Specifies the model you want to use, currently we only support LLaMA-v1. |
+| `--data-path`   | `/path/to/dataset` | Path to the dataset file or folder. |
+| `--output-path` | `output-path.json` | Where to store the output results. |
 | `--num-gpus`    | `1` | Number of GPUs to use, `1/2/4/8` for `7B/13B/30B/65B` model sizes respectively.  |
 
 ### Understanding `--early-exit-layers`
@@ -31,8 +30,8 @@ The `--early-exit-layers` argument takes a string containing a sequence of layer
 
 | Number of Layers Specified  | Example (str)     | Description of Decoding Mode                                                                                     |
 | ---------------------------| ------------- | ----------------------------------------------------------------------------------------------- |
-| 1                          | `-1`      | **Naive decoding** from the last layer.       |
-| 2                          | `16,32`   | **DoLa-static decoding** with the second layer (i.e. `32`) as the `mature_layer` and first layer (i.e. `16`) as `premature_layer`. |
+| 1                          | `-1`      | **Naive decoding** from the final layer output.       |
+| 2                          | `16,32`   | **DoLa-static decoding** with the second specified layer (i.e. `32`) as the `mature_layer` and first specified layer (i.e. `16`) as `premature_layer`. |
 | >2                         | `0,2,4,6,8,10,12,14,32`    | **DoLa decoding** with the last specified layer (i.e. `32`) as the `mature_layer` and all the preceding layers (i.e. `0,2,4,6,8,10,12,14`) as `candidate_premature_layers`. |
 
 ### FACTOR (Multiple Choices)
