@@ -233,7 +233,7 @@ if __name__ == "__main__":
     parser.add_argument("--top_k", type=int, default=0)
     parser.add_argument("--temperature", type=float, default=0.9)
     parser.add_argument("--repetition_penalty", type=float, default=1.0)
-    parser.add_argument("--relative_top", type=float, default=0.1)
+    parser.add_argument("--relative_top", type=float, default=0.0)
     parser.add_argument("--relative_top_value", type=float, default=-1000.0)
     args = parser.parse_args()
     model_name = args.model_name
@@ -298,7 +298,7 @@ if __name__ == "__main__":
             scores_true = []
             scores_false = []
 
-            generate_kwargs = dict(max_new_tokens=args.max_new_tokens, repetition_penalty=args.repetition_penalty, mode=mode, mature_layer=mature_layer, premature_layer=premature_layer, candidate_premature_layers=candidate_premature_layers, relative_top=args.relative_top, relative_top_value=args.relative_top_value)
+            generate_kwargs = dict(max_new_tokens=args.max_new_tokens, repetition_penalty=args.repetition_penalty, mode=mode, mature_layer=mature_layer, premature_layer=premature_layer, candidate_premature_layers=candidate_premature_layers, relative_top=args.relative_top, relative_top_value=args.relative_top_value, post_softmax=False)
 
             for temp_ans in ref_true:
                 # append the current answer choice to the prompt
