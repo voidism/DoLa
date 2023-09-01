@@ -172,10 +172,28 @@ class DoLa:
                 )
 
                 for seq_i in range(prefix_ids.shape[-1] - 1, input_ids.shape[-1] - 1):
-                    # pick the less like layer to contrast with
-                    js_divs = torch.stack(
-                        [0.5 * F.kl_div(F.log_softmax(dict_outputs[mature_layer][:, seq_i, :], dim=-1), F.softmax(dict_outputs[i][:, seq_i, :], dim=-1), reduction='batchmean') + 0.5 * F.kl_div(F.log_softmax(dict_outputs[i][:, seq_i, :], dim=-1), F.softmax(dict_outputs[mature_layer][:, seq_i, :], dim=-1), reduction='batchmean') for i in candidate_premature_layers]
-                    ).squeeze(-1)
+                    # Pick the less like layer to contrast with
+                    # 1. Stacking all premature_layers into a new dimension
+                    stacked_premature_layers = torch.stack([dict_outputs[i][:, seq_i, :] for i in candidate_premature_layers], dim=0)
+
+                    # 2. Calculate the softmax values for mature_layer and all premature_layers
+                    softmax_mature_layer = F.softmax(dict_outputs[mature_layer][:, seq_i, :], dim=-1)  # shape: (batch_size, num_features)
+                    softmax_premature_layers = F.softmax(stacked_premature_layers, dim=-1)  # shape: (num_premature_layers, batch_size, num_features)
+
+                    # 3. Calculate M, the average distribution
+                    M = 0.5 * (softmax_mature_layer[None, :, :] + softmax_premature_layers)  # shape: (num_premature_layers, batch_size, num_features)
+
+                    # 4. Calculate log-softmax for the KL divergence
+                    log_softmax_mature_layer = F.log_softmax(dict_outputs[mature_layer][:, seq_i, :], dim=-1)  # shape: (batch_size, num_features)
+                    log_softmax_premature_layers = F.log_softmax(stacked_premature_layers, dim=-1)  # shape: (num_premature_layers, batch_size, num_features)
+
+                    # 5. Calculate the KL divergences and then the JS divergences
+                    kl1 = F.kl_div(log_softmax_mature_layer[None, :, :], M, reduction='none').mean(-1)  # shape: (num_premature_layers, batch_size)
+                    kl2 = F.kl_div(log_softmax_premature_layers, M, reduction='none').mean(-1)  # shape: (num_premature_layers, batch_size)
+                    js_divs = 0.5 * (kl1 + kl2)  # shape: (num_premature_layers, batch_size)
+
+                    # 6. Reduce the batchmean
+                    js_divs = js_divs.mean(-1)  # shape: (num_premature_layers,)
                     premature_layer = candidate_premature_layers[int(js_divs.argmax().cpu().item())]
                     premature_layer_dist[premature_layer] += 1
 
