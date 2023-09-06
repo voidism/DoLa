@@ -137,7 +137,7 @@ if __name__ == "__main__":
     parser.add_argument("--top_p", type=float, default=0.95)
     parser.add_argument("--top_k", type=int, default=0)
     parser.add_argument("--temperature", type=float, default=0.9)
-    parser.add_argument("--repetition_penalty", type=float, default=1.0)
+    parser.add_argument("--repetition_penalty", type=float, default=None)
     parser.add_argument("--relative_top", type=float, default=0.1)
     args = parser.parse_args()
     model_name = args.model_name
@@ -177,12 +177,16 @@ if __name__ == "__main__":
         mature_layer = None
         premature_layer = None
         candidate_premature_layers = None
+        if args.repetition_penalty is None:
+            args.repetition_penalty = 1.0
     elif len(early_exit_layers) == 2:
         print(f"MODE: DoLa-static decoding with mature layer: {early_exit_layers[1]} and premature layer: {early_exit_layers[0]}")
         mode = "early_exit_contrastive"
         mature_layer = early_exit_layers[1]
         premature_layer = early_exit_layers[0]
         candidate_premature_layers = None
+        if args.repetition_penalty is None:
+            args.repetition_penalty = 1.2
     else:
         print(f"MODE: DoLa decoding with mature layer: {early_exit_layers[-1]} and premature layers: {early_exit_layers[:-1]}")
         mode = "dola"
@@ -190,6 +194,8 @@ if __name__ == "__main__":
         premature_layer = None
         candidate_premature_layers = early_exit_layers[:-1]
         premature_layer_dist = {l:0 for l in candidate_premature_layers}
+        if args.repetition_penalty is None:
+            args.repetition_penalty = 1.2
     answers = []
     result_dict = {'question': [], 'model_completion': []}
     for sample in tqdm(list_data_dict):

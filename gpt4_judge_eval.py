@@ -53,7 +53,7 @@ if __name__ == "__main__":
     parser.add_argument("--question-file", type=str, required=True)
     parser.add_argument("--answer-file", type=str, default="answer.jsonl")
     parser.add_argument("--num-gpus", type=int, default=1)
-    parser.add_argument("--repetition_penalty", type=float, default=1.0)
+    parser.add_argument("--repetition_penalty", type=float, default=None)
     parser.add_argument("--early-exit-layers", type=str, default="-1")
     parser.add_argument("--relative_top", type=float, default=0.1)
     parser.add_argument("--do_sample", action="store_true")
@@ -67,12 +67,16 @@ if __name__ == "__main__":
         mature_layer = None
         premature_layer = None
         candidate_premature_layers = None
+        if args.repetition_penalty is None:
+            args.repetition_penalty = 1.0
     elif len(early_exit_layers) == 2:
         print(f"MODE: DoLa-static decoding with mature layer: {early_exit_layers[1]} and premature layer: {early_exit_layers[0]}")
         mode = "dola-static"
         mature_layer = early_exit_layers[1]
         premature_layer = early_exit_layers[0]
         candidate_premature_layers = None
+        if args.repetition_penalty is None:
+            args.repetition_penalty = 1.2
     else:
         print(f"MODE: DoLa decoding with mature layer: {early_exit_layers[-1]} and premature layers: {early_exit_layers[:-1]}")
         mode = "dola"
@@ -80,6 +84,8 @@ if __name__ == "__main__":
         premature_layer = None
         candidate_premature_layers = early_exit_layers[:-1]
         premature_layer_dist = {l:0 for l in candidate_premature_layers}
+        if args.repetition_penalty is None:
+            args.repetition_penalty = 1.2
 
     model_name = args.model_name
     num_gpus = args.num_gpus
