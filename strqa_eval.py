@@ -175,6 +175,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--model-name", type=str, default="huggyllama/llama-7b")
     parser.add_argument("--num-gpus", type=str, default="1")
+    parser.add_argument("--max_gpu_memory", type=int, default=27)
     parser.add_argument("--device", type=str, choices=["cuda", "cpu"], default="cuda")
     parser.add_argument("--data-path", type=str, default="./strqa")
     parser.add_argument("--output-path", type=str, default="./strqa_result")

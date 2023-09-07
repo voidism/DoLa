@@ -53,6 +53,7 @@ if __name__ == "__main__":
     parser.add_argument("--question-file", type=str, required=True)
     parser.add_argument("--answer-file", type=str, default="answer.jsonl")
     parser.add_argument("--num-gpus", type=int, default=1)
+    parser.add_argument("--max_gpu_memory", type=int, default=27)
     parser.add_argument("--repetition_penalty", type=float, default=None)
     parser.add_argument("--early-exit-layers", type=str, default="-1")
     parser.add_argument("--relative_top", type=float, default=0.1)

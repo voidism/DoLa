@@ -16,11 +16,12 @@ import pandas as pd
 import numpy as np
 
 class DoLa:
-    def __init__(self, model_name, device, num_gpus):
+    def __init__(self, model_name, device, num_gpus, max_gpu_memory=27):
         self.model_name = model_name
         self.device = device
         self.num_gpus = num_gpus
         self.stopping_criteria = None
+        self.max_gpu_memory = max_gpu_memory
 
         self.model, self.tokenizer = self.load_model(model_name)
 
@@ -34,7 +35,7 @@ class DoLa:
                 if self.num_gpus != 1:
                     kwargs.update({
                         "device_map": "auto",
-                        "max_memory": {i: "27GiB" for i in range(self.num_gpus)},
+                        "max_memory": {i: f"{self.max_gpu_memory}GiB" for i in range(self.num_gpus)},
                     })
         elif self.device == "cpu":
             kwargs = {}
