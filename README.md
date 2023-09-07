@@ -1,7 +1,22 @@
 DoLa: Decoding by Contrasting Layers
 ===
 
+[![License: MIT](https://img.shields.io/badge/License-MIT-g.svg)](https://opensource.org/licenses/MIT)
+[![Arxiv](https://img.shields.io/badge/arXiv-2204.10298-B21A1B)](https://arxiv.org/abs/2204.10298)
+[![Hugging Face Transformers](https://img.shields.io/badge/%F0%9F%A4%97-Transformers-blue)](https://github.com/huggingface/transformers)
+[![Tweet](https://img.shields.io/twitter/url/http/shields.io.svg?style=social)](https://twitter.com/YungSungChuang/)
+[![GitHub Stars](https://img.shields.io/github/stars/voidism/DoLa?style=social)](https://github.com/voidism/DoLa/stargazers)
+
 Code for the paper "Decoding in the Depths: Contrasting Layerwise Knowledge Improves Factuality in Large Language Models"
+
+Authors: Yung-Sung Chuang$^\dagger$, Yujia Xie$^\ddagger$, Hongyin Luo$^\dagger$, Yoon Kim$^\dagger$, James Glass$^\dagger$, Pengcheng He$^\ddagger$  
+$^\dagger$Massachusetts Institute of Technology, $^\ddagger$Microsoft
+
+## Overview
+
+![DoLa](figure.png)
+
+Despite their impressive capabilities, large language models (LLMs) are prone to hallucinations, i.e., generating content that deviates from  facts seen during pretraining. We propose a simple decoding strategy for reducing hallucinations with pretrained LLMs that does not require conditioning on retrieved external knowledge nor additional fine-tuning. Our approach obtains the next-token distribution by contrasting the differences in logits obtained from projecting the later layers versus earlier layers to the vocabulary space, exploiting the fact that factual knowledge in an LLMs has generally been shown to be localized to particular transformer layers. We find that this **D**ecoding by c**o**ntrasting **La**yers (DoLA) approach is able to better surface factual knowledge and reduce the generation of incorrect facts.  DoLA consistently improves the truthfulness across multiple choices tasks and open-ended generation tasks, for example improving performance of LLaMA family models on TruthfulQA by 12-17\% absolute points, demonstrating its potential in making LLMs reliably generate truthful facts.
 
 ## Setup
 
@@ -106,10 +121,10 @@ python tfqa_eval.py --model-name huggyllama/llama-65b --data-path /path/to/data/
 
 #### DoLa
 ```bash
-python tfqa_eval.py --model-name huggyllama/llama-7b --early-exit-layers 16,18,20,22,24,26,28,30,32 --repetition_penalty 1.2 --data-path /path/to/data/folder --output-path output-path.json --num-gpus 1 --do-rating --gpt3-config /path/to/gpt3.config.json
-python tfqa_eval.py --model-name huggyllama/llama-13b --early-exit-layers 20,22,24,26,28,30,32,34,36,38,40 --repetition_penalty 1.2 --data-path /path/to/data/folder --output-path output-path.json --num-gpus 2 --do-rating --gpt3-config /path/to/gpt3.config.json
-python tfqa_eval.py --model-name huggyllama/llama-30b --early-exit-layers 40,42,44,46,48,50,52,54,56,58,60 --repetition_penalty 1.2 --data-path /path/to/data/folder --output-path output-path.json --num-gpus 4 --do-rating --gpt3-config /path/to/gpt3.config.json
-python tfqa_eval.py --model-name huggyllama/llama-65b --early-exit-layers 60,62,64,66,68,70,72,74,76,78,80 --repetition_penalty 1.2 --data-path /path/to/data/folder --output-path output-path.json --num-gpus 8 --do-rating --gpt3-config /path/to/gpt3.config.json
+python tfqa_eval.py --model-name huggyllama/llama-7b --early-exit-layers 16,18,20,22,24,26,28,30,32 --data-path /path/to/data/folder --output-path output-path.json --num-gpus 1 --do-rating --gpt3-config /path/to/gpt3.config.json
+python tfqa_eval.py --model-name huggyllama/llama-13b --early-exit-layers 20,22,24,26,28,30,32,34,36,38,40 --data-path /path/to/data/folder --output-path output-path.json --num-gpus 2 --do-rating --gpt3-config /path/to/gpt3.config.json
+python tfqa_eval.py --model-name huggyllama/llama-30b --early-exit-layers 40,42,44,46,48,50,52,54,56,58,60 --data-path /path/to/data/folder --output-path output-path.json --num-gpus 4 --do-rating --gpt3-config /path/to/gpt3.config.json
+python tfqa_eval.py --model-name huggyllama/llama-65b --early-exit-layers 60,62,64,66,68,70,72,74,76,78,80 --data-path /path/to/data/folder --output-path output-path.json --num-gpus 8 --do-rating --gpt3-config /path/to/gpt3.config.json
 ```
 
 ### GSM8K
@@ -130,10 +145,10 @@ python gsm8k_eval.py --model-name huggyllama/llama-65b --data-path /path/to/data
 
 #### DoLa
 ```bash
-python gsm8k_eval.py --model-name huggyllama/llama-7b --early-exit-layers 0,2,4,6,8,10,12,14,32 --repetition_penalty 1.2 --data-path /path/to/data/folder --output-path output-path.json --num-gpus 1
-python gsm8k_eval.py --model-name huggyllama/llama-13b --early-exit-layers 0,2,4,6,8,10,12,14,16,18,40 --repetition_penalty 1.2 --data-path /path/to/data/folder --output-path output-path.json --num-gpus 2
-python gsm8k_eval.py --model-name huggyllama/llama-30b --early-exit-layers 0,2,4,6,8,10,12,14,16,18,60 --repetition_penalty 1.2 --data-path /path/to/data/folder --output-path output-path.json --num-gpus 4
-python gsm8k_eval.py --model-name huggyllama/llama-65b --early-exit-layers 0,2,4,6,8,10,12,14,16,18,80 --repetition_penalty 1.2 --data-path /path/to/data/folder --output-path output-path.json --num-gpus 8
+python gsm8k_eval.py --model-name huggyllama/llama-7b --early-exit-layers 0,2,4,6,8,10,12,14,32 --data-path /path/to/data/folder --output-path output-path.json --num-gpus 1
+python gsm8k_eval.py --model-name huggyllama/llama-13b --early-exit-layers 0,2,4,6,8,10,12,14,16,18,40 --data-path /path/to/data/folder --output-path output-path.json --num-gpus 2
+python gsm8k_eval.py --model-name huggyllama/llama-30b --early-exit-layers 0,2,4,6,8,10,12,14,16,18,60 --data-path /path/to/data/folder --output-path output-path.json --num-gpus 4
+python gsm8k_eval.py --model-name huggyllama/llama-65b --early-exit-layers 0,2,4,6,8,10,12,14,16,18,80 --data-path /path/to/data/folder --output-path output-path.json --num-gpus 8
 ```
 
 ### StrategyQA
@@ -150,10 +165,10 @@ python strqa_eval.py --model-name huggyllama/llama-65b --data-path /path/to/data
 
 #### DoLa
 ```bash
-python strqa_eval.py --model-name huggyllama/llama-7b --early-exit-layers 0,2,4,6,8,10,12,14,32 --repetition_penalty 1.2 --data-path /path/to/data/folder --output-path output-path.json --num-gpus 1
-python strqa_eval.py --model-name huggyllama/llama-13b --early-exit-layers 0,2,4,6,8,10,12,14,16,18,40 --repetition_penalty 1.2 --data-path /path/to/data/folder --output-path output-path.json --num-gpus 2
-python strqa_eval.py --model-name huggyllama/llama-30b --early-exit-layers 0,2,4,6,8,10,12,14,16,18,60 --repetition_penalty 1.2 --data-path /path/to/data/folder --output-path output-path.json --num-gpus 4
-python strqa_eval.py --model-name huggyllama/llama-65b --early-exit-layers 0,2,4,6,8,10,12,14,16,18,80 --repetition_penalty 1.2 --data-path /path/to/data/folder --output-path output-path.json --num-gpus 8
+python strqa_eval.py --model-name huggyllama/llama-7b --early-exit-layers 0,2,4,6,8,10,12,14,32 --data-path /path/to/data/folder --output-path output-path.json --num-gpus 1
+python strqa_eval.py --model-name huggyllama/llama-13b --early-exit-layers 0,2,4,6,8,10,12,14,16,18,40 --data-path /path/to/data/folder --output-path output-path.json --num-gpus 2
+python strqa_eval.py --model-name huggyllama/llama-30b --early-exit-layers 0,2,4,6,8,10,12,14,16,18,60 --data-path /path/to/data/folder --output-path output-path.json --num-gpus 4
+python strqa_eval.py --model-name huggyllama/llama-65b --early-exit-layers 0,2,4,6,8,10,12,14,16,18,80 --data-path /path/to/data/folder --output-path output-path.json --num-gpus 8
 ```
 
 ### GPT-4 Evaluation (Vicuna QA Benchmark)
@@ -170,10 +185,10 @@ python gpt4_judge_eval.py --model-name huggyllama/llama-65b --model-id llama-65b
 
 #### DoLa
 ```bash
-python gpt4_judge_eval.py --model-name huggyllama/llama-7b --early-exit-layers 0,2,4,6,8,10,12,14,32 --repetition_penalty 1.2 --model-id llama-7b-dola --question-file $fastchat/eval/table/question.jsonl --answer-file output-answer.jsonl --num-gpus 1
-python gpt4_judge_eval.py --model-name huggyllama/llama-13b --early-exit-layers 0,2,4,6,8,10,12,14,16,18,40 --repetition_penalty 1.2 --model-id llama-13b-dola --question-file $fastchat/eval/table/question.jsonl --answer-file output-answer.jsonl --num-gpus 2
-python gpt4_judge_eval.py --model-name huggyllama/llama-30b --early-exit-layers 0,2,4,6,8,10,12,14,16,18,60 --repetition_penalty 1.2 --model-id llama-30b-dola --question-file $fastchat/eval/table/question.jsonl --answer-file output-answer.jsonl --num-gpus 4
-python gpt4_judge_eval.py --model-name huggyllama/llama-65b --early-exit-layers 0,2,4,6,8,10,12,14,16,18,80 --repetition_penalty 1.2 --model-id llama-65b-dola --question-file $fastchat/eval/table/question.jsonl --answer-file output-answer.jsonl --num-gpus 8
+python gpt4_judge_eval.py --model-name huggyllama/llama-7b --early-exit-layers 0,2,4,6,8,10,12,14,32 --model-id llama-7b-dola --question-file $fastchat/eval/table/question.jsonl --answer-file output-answer.jsonl --num-gpus 1
+python gpt4_judge_eval.py --model-name huggyllama/llama-13b --early-exit-layers 0,2,4,6,8,10,12,14,16,18,40 --model-id llama-13b-dola --question-file $fastchat/eval/table/question.jsonl --answer-file output-answer.jsonl --num-gpus 2
+python gpt4_judge_eval.py --model-name huggyllama/llama-30b --early-exit-layers 0,2,4,6,8,10,12,14,16,18,60 --model-id llama-30b-dola --question-file $fastchat/eval/table/question.jsonl --answer-file output-answer.jsonl --num-gpus 4
+python gpt4_judge_eval.py --model-name huggyllama/llama-65b --early-exit-layers 0,2,4,6,8,10,12,14,16,18,80 --model-id llama-65b-dola --question-file $fastchat/eval/table/question.jsonl --answer-file output-answer.jsonl --num-gpus 8
 ```
 
 After running the above commands to generate the model responses, we need OpenAI API key to pairwise compare the responses from different decoding results.
@@ -190,3 +205,17 @@ For more details of GPT-4 evaluation, please check [vicuna-blog-eval](https://gi
 - TruthfulQA: https://github.com/sylinrl/TruthfulQA
 - zero_shot_cot: https://github.com/kojima-takeshi188/zero_shot_cot
 - FederatedScope: https://github.com/alibaba/FederatedScope
+
+## Citation
+
+[![DOI](https://img.shields.io/badge/DOI-10.48550/arXiv.2204.10298-green?color=FF8000?color=009922)](https://doi.org/10.48550/arXiv.2204.10298)
+
+Please cite our paper if it's helpful to your work!
+```
+@article{chuang2023decoding,
+  title={Decoding in the Depths: Contrasting Layerwise Knowledge Improves Factuality in Large Language Models},
+  author={Chuang, Yung-Sung and Xie, Yujia and Luo, Hongyin and Kim, Yoon and Glass, James and He, Pengcheng},
+  journal={arXiv preprint arXiv:},
+  year={2023},
+}
+```
