@@ -1,4 +1,4 @@
-DoLa: Decoding by Contrasting Layers
+DoLa: Decoding by Contrasting Layers Improves Factuality in Large Language Models
 ===
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-g.svg)](https://opensource.org/licenses/MIT)
@@ -7,10 +7,10 @@ DoLa: Decoding by Contrasting Layers
 [![Tweet](https://img.shields.io/twitter/url/http/shields.io.svg?style=social)](https://twitter.com/YungSungChuang/)
 [![GitHub Stars](https://img.shields.io/github/stars/voidism/DoLa?style=social)](https://github.com/voidism/DoLa/stargazers)
 
-Code for the paper "Decoding in the Depths: Contrasting Layerwise Knowledge Improves Factuality in Large Language Models"
+Code for the paper "DoLa: Decoding by Contrasting Layers Improves Factuality in Large Language Models"
 
-Authors: Yung-Sung Chuang$^\dagger$, Yujia Xie$^\ddagger$, Hongyin Luo$^\dagger$, Yoon Kim$^\dagger$, James Glass$^\dagger$, Pengcheng He$^\ddagger$  
-$^\dagger$Massachusetts Institute of Technology, $^\ddagger$Microsoft
+Authors: [Yung-Sung Chuang](https://people.csail.mit.edu/yungsung/) $^\dagger$, [Yujia Xie](https://sites.google.com/view/yujia) $^\ddagger$, [Hongyin Luo](https://luohongyin.github.io/) $^\dagger$, [Yoon Kim](https://people.csail.mit.edu/yoonkim/) $^\dagger$, [James Glass](https://people.csail.mit.edu/jrg/) $^\dagger$, [Pengcheng He](https://scholar.google.com/citations?user=TS1RoxAAAAAJ&hl=en) $^\ddagger$  
+$^\dagger$ Massachusetts Institute of Technology, $^\ddagger$ Microsoft
 
 ## Overview
 
@@ -213,7 +213,7 @@ For more details of GPT-4 evaluation, please check [vicuna-blog-eval](https://gi
 Please cite our paper if it's helpful to your work!
 ```
 @article{chuang2023decoding,
-  title={Decoding in the Depths: Contrasting Layerwise Knowledge Improves Factuality in Large Language Models},
+  title={DoLa: Decoding by Contrasting Layers Improves Factuality in Large Language Models},
   author={Chuang, Yung-Sung and Xie, Yujia and Luo, Hongyin and Kim, Yoon and Glass, James and He, Pengcheng},
   journal={arXiv preprint arXiv:},
   year={2023},
