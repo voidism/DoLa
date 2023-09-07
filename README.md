@@ -7,6 +7,8 @@ DoLa: Decoding by Contrasting Layers Improves Factuality in Large Language Model
 [![Tweet](https://img.shields.io/twitter/url/http/shields.io.svg?style=social)](https://twitter.com/YungSungChuang/)
 [![GitHub Stars](https://img.shields.io/github/stars/voidism/DoLa?style=social)](https://github.com/voidism/DoLa/stargazers)
 
+[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/voidism/DoLa/blob/master/dola_evaluation.ipynb)
+
 Code for the paper "DoLa: Decoding by Contrasting Layers Improves Factuality in Large Language Models"
 
 Authors: [Yung-Sung Chuang](https://people.csail.mit.edu/yungsung/) $^\dagger$, [Yujia Xie](https://sites.google.com/view/yujia) $^\ddagger$, [Hongyin Luo](https://luohongyin.github.io/) $^\dagger$, [Yoon Kim](https://people.csail.mit.edu/yoonkim/) $^\dagger$, [James Glass](https://people.csail.mit.edu/jrg/) $^\dagger$, [Pengcheng He](https://scholar.google.com/citations?user=TS1RoxAAAAAJ&hl=en) $^\ddagger$  
@@ -31,12 +33,13 @@ pip install openai # -> only for truthfulqa and gpt4_eval
 
 ### Arguments
 
-| Argument        | Example           | Description   |
-| --------------- | ----------------- | ------------- |
-| `--model-name`  | `huggyllama/llama-7b` | Specifies the model you want to use, currently we only support LLaMA-v1. |
-| `--data-path`   | `/path/to/dataset` | Path to the dataset file or folder. |
-| `--output-path` | `output-path.json` | Where to store the output results. |
-| `--num-gpus`    | `1` | Number of GPUs to use, `1/2/4/8` for `7B/13B/30B/65B` model sizes respectively.  |
+| Argument          | Example           | Description   |
+| ----------------- | ----------------- | ------------- |
+| `--model-name`    | `huggyllama/llama-7b` | Specifies the model you want to use, currently we only support LLaMA-v1. |
+| `--data-path`     | `/path/to/dataset` | Path to the dataset file or folder. |
+| `--output-path`   | `output-path.json` | Where to store the output results. |
+| `--num-gpus`      | `1` | Number of GPUs to use, `1/2/4/8` for `7B/13B/30B/65B` model sizes respectively.  |
+| `--max_gpu_memory`| `27` | Maximum GPU memory size (in GiB) to allocate. Default: 27 (for 32G V100).  |
 
 ### Understanding `--early-exit-layers`
 
@@ -92,7 +95,7 @@ python tfqa_mc_eval.py --model-name huggyllama/llama-65b --early-exit-layers 60,
 
 ### TruthfulQA
 
-To evaluate the open-ended generation result of TruthfulQA, we need to finetune two GPT-3 curie models throught OpenAI API:
+To evaluate the open-ended generation result of TruthfulQA, we need to finetune two GPT-3 curie models through OpenAI API:
 
 ```
 openai api fine_tunes.create -t finetune_truth.jsonl -m curie --n_epochs 5 --batch_size 21 --learning_rate_multiplier 0.1
