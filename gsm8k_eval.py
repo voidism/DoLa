@@ -272,7 +272,7 @@ if __name__ == "__main__":
     if args.debug:
         list_data_dict = list_data_dict[:10]
     
-    llm = DoLa(model_name, device, num_gpus)
+    llm = DoLa(model_name, device, num_gpus, args.max_gpu_memory)
     llm.set_stop_words(["Q:", "\end{code}"])
     early_exit_layers = [int(x) for x in args.early_exit_layers.split(',')]
     if len(early_exit_layers) == 1:
