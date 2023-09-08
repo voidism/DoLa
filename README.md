@@ -2,7 +2,7 @@ DoLa: Decoding by Contrasting Layers Improves Factuality in Large Language Model
 ===
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-g.svg)](https://opensource.org/licenses/MIT)
-[![Arxiv](https://img.shields.io/badge/arXiv-2204.10298-B21A1B)](https://arxiv.org/abs/2204.10298)
+[![Arxiv](https://img.shields.io/badge/arXiv-2309.03883-B21A1B)](https://arxiv.org/abs/2309.03883)
 [![Hugging Face Transformers](https://img.shields.io/badge/%F0%9F%A4%97-Transformers-blue)](https://github.com/huggingface/transformers)
 [![Tweet](https://img.shields.io/twitter/url/http/shields.io.svg?style=social)](https://twitter.com/YungSungChuang/)
 [![GitHub Stars](https://img.shields.io/github/stars/voidism/DoLa?style=social)](https://github.com/voidism/DoLa/stargazers)
@@ -11,6 +11,7 @@ DoLa: Decoding by Contrasting Layers Improves Factuality in Large Language Model
 
 Code for the paper "DoLa: Decoding by Contrasting Layers Improves Factuality in Large Language Models"
 
+ArXiv link: https://arxiv.org/abs/2309.03883
 Authors: [Yung-Sung Chuang](https://people.csail.mit.edu/yungsung/) $^\dagger$, [Yujia Xie](https://sites.google.com/view/yujia) $^\ddagger$, [Hongyin Luo](https://luohongyin.github.io/) $^\dagger$, [Yoon Kim](https://people.csail.mit.edu/yoonkim/) $^\dagger$, [James Glass](https://people.csail.mit.edu/jrg/) $^\dagger$, [Pengcheng He](https://scholar.google.com/citations?user=TS1RoxAAAAAJ&hl=en) $^\ddagger$  
 $^\dagger$ Massachusetts Institute of Technology, $^\ddagger$ Microsoft
 
@@ -211,14 +212,14 @@ For more details of GPT-4 evaluation, please check [vicuna-blog-eval](https://gi
 
 ## Citation
 
-[![DOI](https://img.shields.io/badge/DOI-10.48550/arXiv.2204.10298-green?color=FF8000?color=009922)](https://doi.org/10.48550/arXiv.2204.10298)
+[![DOI](https://img.shields.io/badge/DOI-10.48550/arXiv.2309.03883-green?color=FF8000?color=009922)](https://doi.org/10.48550/arXiv.2309.03883)
 
 Please cite our paper if it's helpful to your work!
 ```
 @article{chuang2023decoding,
   title={DoLa: Decoding by Contrasting Layers Improves Factuality in Large Language Models},
   author={Chuang, Yung-Sung and Xie, Yujia and Luo, Hongyin and Kim, Yoon and Glass, James and He, Pengcheng},
-  journal={arXiv preprint arXiv:},
+  journal={arXiv preprint arXiv:2309.03883},
   year={2023},
 }
 ```
