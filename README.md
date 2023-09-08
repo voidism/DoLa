@@ -5,7 +5,7 @@ DoLa: Decoding by Contrasting Layers Improves Factuality in Large Language Model
 [![Arxiv](https://img.shields.io/badge/arXiv-2309.03883-B21A1B)](https://arxiv.org/abs/2309.03883)
 [![Hugging Face Transformers](https://img.shields.io/badge/%F0%9F%A4%97-Transformers-blue)](https://github.com/huggingface/transformers)
 [![Tweet](https://img.shields.io/twitter/url/http/shields.io.svg?style=social)](https://twitter.com/YungSungChuang/)
-<!-- [![GitHub Stars](https://img.shields.io/github/stars/voidism/DoLa?style=social)](https://github.com/voidism/DoLa/stargazers) -->
+[![GitHub Stars](https://img.shields.io/github/stars/voidism/DoLa?style=social)](https://github.com/voidism/DoLa/stargazers)
 
 [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/voidism/DoLa/blob/master/dola_evaluation.ipynb)
 
@@ -216,7 +216,7 @@ For more details of GPT-4 evaluation, please check [vicuna-blog-eval](https://gi
 
 Please cite our paper if it's helpful to your work!
 ```
-@article{chuang2023decoding,
+@article{chuang2023dola,
   title={DoLa: Decoding by Contrasting Layers Improves Factuality in Large Language Models},
   author={Chuang, Yung-Sung and Xie, Yujia and Luo, Hongyin and Kim, Yoon and Glass, James and He, Pengcheng},
   journal={arXiv preprint arXiv:2309.03883},
