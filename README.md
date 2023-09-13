@@ -54,7 +54,7 @@ The `--early-exit-layers` argument takes a string containing a sequence of layer
 | >2                         | `0,2,4,6,8,10,12,14,32`    | **DoLa decoding** with the last specified layer (i.e. `32`) as the `mature_layer` and all the preceding layers (i.e. `0,2,4,6,8,10,12,14`) as `candidate_premature_layers`. |
 
 ### FACTOR (Multiple Choices)
-Please contact the author of [Generating Benchmarks for Factuality Evaluation of Language Models](https://arxiv.org/abs/2307.06908) to get early released dataset, before the dataset is released at https://github.com/AI21Labs/factor.
+Please download the data file `wiki_factor.csv` from https://github.com/AI21Labs/factor
 
 #### Baseline
 ```bash
@@ -71,8 +71,6 @@ python factor_eval.py --model-name huggyllama/llama-13b --early-exit-layers 0,2,
 python factor_eval.py --model-name huggyllama/llama-30b --early-exit-layers 0,2,4,6,8,10,12,14,16,18,60 --data-path /path/to/wiki_factor.csv --output-path output-path.json --num-gpus 4
 python factor_eval.py --model-name huggyllama/llama-65b --early-exit-layers 0,2,4,6,8,10,12,14,16,18,80 --data-path /path/to/wiki_factor.csv --output-path output-path.json --num-gpus 8
 ```
-
-Change `wiki_factor.csv` to `news_factor.csv` for the news subset of FACTOR.
 
 ### TruthfulQA (Multiple Choices)
 
