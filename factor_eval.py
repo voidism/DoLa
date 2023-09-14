@@ -158,7 +158,6 @@ if __name__ == "__main__":
     parser.add_argument("--repetition_penalty", type=float, default=1.0)
     parser.add_argument("--relative_top", type=float, default=0.1)
     parser.add_argument("--relative_top_value", type=float, default=-1000.0)
-    parser.add_argument("--relative_top_with_norm", action="store_true")
     parser.add_argument("--do_sample", action="store_true")
     parser.add_argument("--do_shuffle", action="store_true")
     parser.add_argument("--debug", action="store_true")
@@ -213,7 +212,7 @@ if __name__ == "__main__":
         answers_false = []
         for i in range(3):
             answers_false.append(' ' + sample[f'contradiction_{i}'])
-        generate_kwargs = dict(max_new_tokens=args.max_new_tokens, do_sample=args.do_sample, top_p=args.top_p, top_k=args.top_k, temperature=args.temperature, repetition_penalty=args.repetition_penalty, mode=mode, mature_layer=mature_layer, premature_layer=premature_layer, candidate_premature_layers=candidate_premature_layers, relative_top=args.relative_top, relative_top_with_norm=args.relative_top_with_norm, relative_top_value=args.relative_top_value)
+        generate_kwargs = dict(max_new_tokens=args.max_new_tokens, do_sample=args.do_sample, top_p=args.top_p, top_k=args.top_k, temperature=args.temperature, repetition_penalty=args.repetition_penalty, mode=mode, mature_layer=mature_layer, premature_layer=premature_layer, candidate_premature_layers=candidate_premature_layers, relative_top=args.relative_top, relative_top_value=args.relative_top_value)
         answer_true_log_prob, c_dist = llm.lm_score(context, answer_true, **generate_kwargs)
         if mode == "dola":
             for k, v in c_dist.items():
