@@ -3852,6 +3852,8 @@ class GenerationMixin:
         unfinished_sequences = torch.ones(input_ids.shape[0], dtype=torch.long, device=input_ids.device)
 
         this_peer_finished = False  # used by synced_gpus only
+
+        student_model_kwargs = copy.deepcopy(model_kwargs)
         # auto-regressive generation
         while True:
             if synced_gpus:
@@ -3935,7 +3937,7 @@ class GenerationMixin:
                 outputs, model_kwargs, is_encoder_decoder=self.config.is_encoder_decoder
             )
             student_model_kwargs = self._update_model_kwargs_for_generation(
-                student_outputs, model_kwargs, is_encoder_decoder=self.config.is_encoder_decoder
+                student_outputs, student_model_kwargs, is_encoder_decoder=self.config.is_encoder_decoder
             )
 
             # if eos_token was found in one sentence, set sentence to finished
