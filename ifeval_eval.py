@@ -16,6 +16,7 @@ import urllib.request
 import zipfile
 
 from dola import DoLa
+from dola_t5 import DoLaT5
 
 transformers.logging.set_verbosity(40)
 
@@ -95,7 +96,12 @@ if __name__ == "__main__":
         chunk_size = len(list_data_dict) // args.total_shard
         list_data_dict = list_data_dict[args.shard_id * chunk_size: (args.shard_id + 1) * chunk_size]
     
-    llm = DoLa(model_name, device, num_gpus, args.max_gpu_memory)
+    # Conditionally select DoLa version
+    if ('t5' in model_name):
+        llm = DoLaT5(model_name, device, num_gpus, args.max_gpu_memory)
+    else:
+        llm = DoLa(model_name, device, num_gpus, args.max_gpu_memory)
+
     stop_word_list = ["Q:"]
     llm.set_stop_words(stop_word_list)
     early_exit_layers = [int(x) for x in args.early_exit_layers.split(',')]
