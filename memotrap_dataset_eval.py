@@ -15,7 +15,8 @@ import ssl
 import urllib.request
 import zipfile
 
-from dola_memotrap_dataset import DoLa
+from dola import DoLa
+from dola_t5 import DoLaT5
 
 transformers.logging.set_verbosity(40)
 
