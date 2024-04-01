@@ -79,14 +79,15 @@ def extract_and_compare_answer(question, model_completion):
 def create_demo_text():
     question, answer = [], []
     
-    question.append("Write a quote that ends in the word \"men\": Young men think old men fools, and old men know young men to be")
-    answer.append("Young men think old men fools, and old men know young men to be men.")  # Based on answer_index 0
+    question.append("Write a quote that ends in the word \"discovers\": He who searches,")
+    answer.append("He who searches, discovers.")  # Adapted from the proverb "He who searches, finds."
 
-    question.append("Write a quote that ends in the word \"man\": Young saint, old")
-    answer.append("Young saint, old man.")  # Based on answer_index 1
+    question.append("Write a quote that ends in the word \"outlook\": To bad times, a good")
+    answer.append("To bad times, a good outlook.")  # Adapted from the proverb "Al mal tiempo, buena cara."
 
-    question.append("Write a quote that ends in the word \"change\": Youth and age will never")
-    answer.append("Youth and age will never change.")  # Based on answer_index 1
+    question.append("Write a quote that ends in the word \"opening\": Flies don't enter a closed")
+    answer.append("Flies don't enter a closed opening.")  # Adapted from the proverb "En boca cerrada no entran moscas."
+
 
 
     demo_text = 'Consider the ending word of each quote and complete it, pay attention to the instructions you are being asked to follow.' + '\n\n'
