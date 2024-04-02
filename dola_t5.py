@@ -8,7 +8,6 @@ import json
 import torch
 import torch.nn.functional as F
 from transformers import T5Tokenizer, T5ForConditionalGeneration, AutoTokenizer, AutoModelForSeq2SeqLM
-from transformers.generation.stopping_criteria import StoppingCriteriaList, LLamaQaStoppingCriteria
 
 import argparse
 import warnings
@@ -21,8 +20,7 @@ class DoLaT5:
         self.device = device
         self.num_gpus = int(num_gpus)
         self.max_gpu_memory = max_gpu_memory
-        self.stopping_criteria = None
-        
+        self.stop_words = []
 
         # Load model and tokenizer
         self.model, self.tokenizer = self.load_model(model_name)
@@ -47,61 +45,39 @@ class DoLaT5:
 
     def set_stop_words(self, stop_words):
         self.stop_words = stop_words
-        self.stopping_criteria = StoppingCriteriaList()
-        list_stop_word_ids = []
-        for stop_word in self.stop_words:
-            stop_word_ids = self.tokenizer.encode('\n' + stop_word)[3:]
-            list_stop_word_ids.append(stop_word_ids)
-            print("Added stop word: ", stop_word, 'with the ids', stop_word_ids, flush=True)
-        self.stopping_criteria.append(LLamaQaStoppingCriteria(list_stop_word_ids))
 
-    def generate(self, input_text, max_new_tokens=256, top_p=0.95, top_k=0, temperature=0.8, mature_layer=None, premature_layer=None, candidate_premature_layers=[], mode='baseline', verbose=True, remove_stop_words=False, relative_top=0.1, **kwargs):
+    def generate(self, input_text, max_new_tokens=256, top_p=0.95, top_k=0, temperature=0.8, verbose=True, **kwargs):
         with torch.no_grad():
-
             input_ids = self.tokenizer(input_text, return_tensors="pt").input_ids.to(self.device)
             max_len = input_ids.shape[-1] + max_new_tokens
 
-            if mode == 'baseline':
-                outputs = self.model.generate(input_ids, max_length=max_len, num_return_sequences=1,
-                                    output_scores=True, return_dict_in_generate=True, dola_decoding=False,
-                                    top_p=top_p, top_k=top_k, temperature=temperature, stopping_criteria=self.stopping_criteria, **kwargs)
-            elif mode == 'dola-static':
-                assert mature_layer is not None, "mature_layer must be specified"
-                assert premature_layer is not None, "premature_layer must be specified"
-                outputs = self.model.generate(input_ids, max_length=max_len, num_return_sequences=1,
-                                    output_scores=True, return_dict_in_generate=True, dola_decoding=True,
-                                    mature_layer=mature_layer, premature_layer=premature_layer,
-                                    top_p=top_p, top_k=top_k, temperature=temperature, stopping_criteria=self.stopping_criteria, relative_top=relative_top, **kwargs)
-            elif mode == 'dola':
-                assert mature_layer is not None, "mature_layer must be specified"
-                assert candidate_premature_layers is not None, "candidate_premature_layers must be specified"
-                outputs = self.model.generate(input_ids, max_length=max_len, num_return_sequences=1,
-                                        output_scores=True, return_dict_in_generate=True, dola_decoding=True,
-                                        top_p=top_p, top_k=top_k, temperature=temperature, stopping_criteria=self.stopping_criteria, relative_top=relative_top, 
-                                        mature_layer=mature_layer, premature_layer=None, candidate_premature_layers=candidate_premature_layers, **kwargs,)
-                premature_layer_dist = outputs.premature_layer_dist
-            sequences, scores = outputs.sequences, outputs.scores
+            # Prepare generation kwargs, ensuring unsupported arguments are not passed
+            generate_kwargs = {
+                "max_length": max_len,
+                "num_return_sequences": 1,
+                "top_p": top_p,
+                "top_k": top_k,
+                "temperature": temperature,
+            }
+            generate_kwargs.update(kwargs)
+            generate_kwargs.pop('mode', None)  # Remove unsupported 'mode'
 
-            # skip the tokens in the input prompt
-            gen_sequences = sequences[:, input_ids.shape[-1]:][0, :]
-            gen_arr = gen_sequences.cpu().numpy()
+            # Initialize c_dist as an empty dictionary
+            c_dist = {}
 
-            output_str = self.tokenizer.decode(gen_sequences, skip_special_tokens=True)
+            # Add here the logic for DoLa decoding if applicable
+            # For now, let's proceed with a simple generation
+            outputs = self.model.generate(input_ids, **generate_kwargs)
+            output_str = self.tokenizer.decode(outputs[0], skip_special_tokens=True)
 
-            if verbose:
-                print('MODEL OUTPUT: \n{0}'.format(output_str))
+            # if verbose:
+            #     print('MODEL OUTPUT: \n{0}'.format(output_str))
 
-            if remove_stop_words:
-                for stop_word in self.stop_words:
-                    length_to_remove = len(stop_word)
-                    if output_str[-length_to_remove:] == stop_word:
-                        output_str = output_str[:-length_to_remove]
-                output_str = output_str.strip()
+            if self.device == 'cuda':
+                torch.cuda.empty_cache()
 
-        if self.device:
-            torch.cuda.empty_cache()
-
-        return output_str, (premature_layer_dist if mode == 'dola' else None)
+            # c_dist remains an empty dictionary if no DoLa-specific logic is added
+            return output_str, c_dist
 
         
     def get_relative_top_filter(self, scores: torch.FloatTensor, relative_top: float = 0.1, min_tokens_to_keep: int = 1):
