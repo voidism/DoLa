@@ -111,9 +111,10 @@ def build_prompt(sample):
     return input_text_prompt
 
 def build_alternate_prompt(sample):
-    prompt = f'{sample['prompt']}... Choose the correct ending:'
-    prompt += f' A){sample['classes'][0]}'
-    prompt += f' B){sample['classes'][1]}'
+    prompt = f'{sample["prompt"]}. Choose the correct ending:'
+    prompt += f' A){sample["classes"][0]}'
+    prompt += f' B){sample["classes"][1]}'
+    prompt += '\n Answer:'
     return prompt
 
 if __name__ == "__main__":
@@ -147,7 +148,7 @@ if __name__ == "__main__":
     # fp = '1-proverb-ending.csv'
     fp = 'memo-trap_classification.jsonl'
 
-    list_data_dict = load_csv(fp)
+    list_data_dict = load_jsonl(fp)
 
     if args.debug:
         list_data_dict = list_data_dict[:10]
@@ -172,7 +173,7 @@ if __name__ == "__main__":
         premature_layer = None
         candidate_premature_layers = None
         if args.repetition_penalty is None:
-            args.repetition_penalty = 1.0
+            args.repetition_penalty = 1.2
     elif len(early_exit_layers) == 2:
         print(f"MODE: DoLa-static decoding with mature layer: {early_exit_layers[1]} and premature layer: {early_exit_layers[0]}")
         mode = "early_exit_contrastive"
@@ -192,19 +193,18 @@ if __name__ == "__main__":
             args.repetition_penalty = 1.2
 
     answers = []
-    result_dict = {'question': [], 'model_completion': [], 'model_answer_ending': [], 'correct_answer': [], 'correctness': []}
+    result_dict = {'question': [], 'model_completion': [], 'input_text': [], 'model_answer_ending': [], 'correct_answer': [], 'correctness': []}
     for i, sample in enumerate(tqdm(list_data_dict)):
         
         input_text = build_alternate_prompt(sample)
         generate_kwargs = dict(max_new_tokens=args.max_new_tokens, top_p=args.top_p, top_k=args.top_k, temperature=args.temperature, repetition_penalty=args.repetition_penalty, mode=mode, mature_layer=mature_layer, premature_layer=premature_layer, candidate_premature_layers=candidate_premature_layers)
         model_completion, c_dist = llm.generate(input_text, **generate_kwargs)
         
-        
-        for stop_word in stop_word_list:
-            length_to_remove = len(stop_word)
-            if model_completion[-length_to_remove:] == stop_word:
-                model_completion = model_completion[:-length_to_remove]
-        model_completion = model_completion.strip()
+        # for stop_word in stop_word_list:
+        #     length_to_remove = len(stop_word)
+        #     if model_completion[-length_to_remove:] == stop_word:
+        #         model_completion = model_completion[:-length_to_remove]
+        # model_completion = model_completion.strip()
         
         is_correct, model_answer_ending, correct_answer = extract_and_compare_answer(question=sample, model_completion=model_completion)
         
@@ -213,6 +213,7 @@ if __name__ == "__main__":
                 premature_layer_dist[k] += v
         model_answer = model_completion
         result_dict['model_completion'].append(model_completion)
+        result_dict['input_text'].append(input_text)
         result_dict['question'].append(sample)
         result_dict['model_answer_ending'].append(model_answer_ending)
         result_dict['correct_answer'].append(correct_answer)
@@ -221,7 +222,7 @@ if __name__ == "__main__":
         if DEBUG:
             print(f'Full input_text:\n{input_text}\n\n')
         
-        print(f'Question: {sample}\n\n'
+        print(f'Question: {input_text}\n\n'
             f'Model Completion: {model_completion}\n\n')
 
         
