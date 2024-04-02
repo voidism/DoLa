@@ -4,6 +4,7 @@
 
 import re
 import os
+import ast
 import json
 import random
 import transformers
@@ -60,7 +61,16 @@ def load_csv(file_path):
 
     return list_data
 
-
+def load_jsonl(file_path, only_part_1=True):
+    data_list = []
+    with open(file_path, 'r') as f:
+        for line in f:
+            cur_data_json = json.loads(line)
+            # Parse the class info into an array
+            cur_data_json['classes'] = ast.literal_eval(cur_data_json['classes'])
+            if cur_data_json['part'] == 1 or not only_part_1:
+                data_list.append(cur_data_json)
+    return data_list
 
 def extract_and_compare_answer(question, model_completion):
     # Extract the ending of the model's completion
@@ -79,7 +89,7 @@ def extract_and_compare_answer(question, model_completion):
 
 def create_demo_text():
     question, answer = [], []
-    
+
     question.append("Write a quote that ends in the word \"discovers\": He who searches,")
     answer.append("He who searches, discovers.")  # Adapted from the proverb "He who searches, finds."
 
@@ -89,20 +99,22 @@ def create_demo_text():
     question.append("Write a quote that ends in the word \"opening\": Flies don't enter a closed")
     answer.append("Flies don't enter a closed opening.")  # Adapted from the proverb "En boca cerrada no entran moscas."
 
-
-
     demo_text = 'Consider the ending word of each quote and complete it, pay attention to the instructions you are being asked to follow.' + '\n\n'
     for i in range(len(question)):
         demo_text += "Q: " + question[i] + "\nA: " + answer[i] + "\n\n"
     return demo_text
 
-
-def build_prompt(input_text):
+def build_prompt(sample):
+    input_text = sample['prompt']
     demo = create_demo_text()
     input_text_prompt = demo + "Q: " + input_text + "\n" + "A:"
     return input_text_prompt
 
-
+def build_alternate_prompt(sample):
+    prompt = f'{sample['prompt']}... Choose the correct ending:'
+    prompt += f' A){sample['classes'][0]}'
+    prompt += f' B){sample['classes'][1]}'
+    return prompt
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
@@ -132,8 +144,8 @@ if __name__ == "__main__":
     device = args.device
 
     # Get test file
- 
-    fp = '1-proverb-ending.csv'
+    # fp = '1-proverb-ending.csv'
+    fp = 'memo-trap_classification.jsonl'
 
     list_data_dict = load_csv(fp)
 
@@ -183,7 +195,7 @@ if __name__ == "__main__":
     result_dict = {'question': [], 'model_completion': [], 'model_answer_ending': [], 'correct_answer': [], 'correctness': []}
     for i, sample in enumerate(tqdm(list_data_dict)):
         
-        input_text = build_prompt(sample['prompt'])
+        input_text = build_alternate_prompt(sample)
         generate_kwargs = dict(max_new_tokens=args.max_new_tokens, top_p=args.top_p, top_k=args.top_k, temperature=args.temperature, repetition_penalty=args.repetition_penalty, mode=mode, mature_layer=mature_layer, premature_layer=premature_layer, candidate_premature_layers=candidate_premature_layers)
         model_completion, c_dist = llm.generate(input_text, **generate_kwargs)
         
