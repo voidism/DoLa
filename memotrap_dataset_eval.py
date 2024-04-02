@@ -63,11 +63,14 @@ def load_csv(file_path):
 
 def load_jsonl(file_path, only_part_1=True):
     data_list = []
+    options = ['A', 'B']
     with open(file_path, 'r') as f:
         for line in f:
             cur_data_json = json.loads(line)
             # Parse the class info into an array
             cur_data_json['classes'] = ast.literal_eval(cur_data_json['classes'])
+            cur_data_json['correct_option'] = options[cur_data_json['answer_index']]
+            cur_data_json['correct_ending'] = cur_data_json['classes'][cur_data_json['answer_index']]
             if cur_data_json['part'] == 1 or not only_part_1:
                 data_list.append(cur_data_json)
     return data_list
@@ -159,7 +162,7 @@ if __name__ == "__main__":
     list_data_dict = load_jsonl(fp)
 
     if args.debug:
-        list_data_dict = list_data_dict[:10]
+        list_data_dict = list_data_dict[:15]
     
     if args.parallel:
         chunk_size = len(list_data_dict) // args.total_shard
@@ -204,7 +207,7 @@ if __name__ == "__main__":
     result_dict = {'question': [], 'model_completion': [], 'input_text': [], 'model_answer_ending': [], 'correct_answer': [], 'correctness': []}
     for i, sample in enumerate(tqdm(list_data_dict)):
         
-        input_text = build_alternate_prompt(sample)
+        input_text = build_prompt_v3(sample)
         generate_kwargs = dict(max_new_tokens=args.max_new_tokens, top_p=args.top_p, top_k=args.top_k, temperature=args.temperature, repetition_penalty=args.repetition_penalty, mode=mode, mature_layer=mature_layer, premature_layer=premature_layer, candidate_premature_layers=candidate_premature_layers)
         model_completion, c_dist = llm.generate(input_text, **generate_kwargs)
         
@@ -230,9 +233,9 @@ if __name__ == "__main__":
         if DEBUG:
             print(f'Full input_text:\n{input_text}\n\n')
         
-        print(f'Question: {input_text}\n\n'
-            f'Model Completion: {model_completion}\n\n')
-
+        print(f'Question: {input_text}\n')
+        print(f'Model Completion: {model_completion}')
+        print(f'Correct Option: {sample["correct_option"]},{sample["correct_ending"]}\n')
         
     if mode == "dola" and args.debug:
         total_tokens = sum(premature_layer_dist.values())
