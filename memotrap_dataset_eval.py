@@ -110,11 +110,19 @@ def build_prompt(sample):
     input_text_prompt = demo + "Q: " + input_text + "\n" + "A:"
     return input_text_prompt
 
-def build_alternate_prompt(sample):
+def build_prompt_v2(sample):
     prompt = f'{sample["prompt"]}. Choose the correct ending:'
     prompt += f' A){sample["classes"][0]}'
     prompt += f' B){sample["classes"][1]}'
     prompt += '\n Answer:'
+    return prompt
+
+def build_prompt_v3(sample):
+    prompt = f'For the question: {sample["prompt"]}...\n'
+    sentence_clause = sample["prompt"].split(":", 1)[1]
+    prompt += "Which is the correct answer?"
+    prompt += f' A){sentence_clause}{sample["classes"][0]}'
+    prompt += f' B){sentence_clause}{sample["classes"][1]}'
     return prompt
 
 if __name__ == "__main__":
