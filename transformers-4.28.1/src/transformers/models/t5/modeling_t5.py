@@ -19,7 +19,7 @@ import copy
 import math
 import os
 import warnings
-from typing import Optional, Tuple, Union
+from typing import Optional, Tuple, Union, List
 
 import torch
 from torch import nn
@@ -1632,6 +1632,7 @@ class T5ForConditionalGeneration(T5PreTrainedModel):
         output_attentions: Optional[bool] = None,
         output_hidden_states: Optional[bool] = None,
         return_dict: Optional[bool] = None,
+        early_exit_layers: Optional[List[int]] = None,
     ) -> Union[Tuple[torch.FloatTensor], Seq2SeqLMOutput]:
         r"""
         labels (`torch.LongTensor` of shape `(batch_size,)`, *optional*):
@@ -1752,8 +1753,11 @@ class T5ForConditionalGeneration(T5PreTrainedModel):
             # TODO(thom): Add z_loss https://github.com/tensorflow/mesh/blob/fa19d69eafc9a482aff0b59ddd96b025c0cb207d/mesh_tensorflow/layers.py#L666
 
         if not return_dict:
-            output = (lm_logits,) + decoder_outputs[1:] + encoder_outputs
+            # output = (lm_logits,) + decoder_outputs[1:] + encoder_outputs
+            output = (lm_logits,) + decoder_outputs[1:]
             return ((loss,) + output) if loss is not None else output
+        
+        print("HELLO HELLO")
 
         return Seq2SeqLMOutput(
             loss=loss,

@@ -2647,15 +2647,22 @@ class GenerationMixin:
             # prepare model inputs
             model_inputs = self.prepare_inputs_for_generation(input_ids, **model_kwargs)
 
-            
             # forward pass to get next token
-            dict_outputs, outputs = self(
+            # dict_outputs, outputs = self(
+            all_outputs = self(
                 **model_inputs,
                 return_dict=True,
                 output_attentions=output_attentions,
                 output_hidden_states=output_hidden_states,
                 early_exit_layers=early_exit_layers,
             )
+
+            # print(all_outputs)
+            print("\n>>>>>>>>>>")
+            print(len(all_outputs))
+            print([type(t) for t in all_outputs])
+            dict_outputs = all_outputs[0]
+            outputs = all_outputs[1]
 
             if synced_gpus and this_peer_finished:
                 continue  # don't waste resources running the code we don't need
