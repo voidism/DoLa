@@ -7,79 +7,111 @@ import json
 
 import torch
 import torch.nn.functional as F
-from transformers import T5Tokenizer, T5ForConditionalGeneration, AutoTokenizer, AutoModelForSeq2SeqLM
+from transformers import AutoTokenizer, AutoModelForCausalLM, AutoModelForSeq2SeqLM
+from transformers.generation.stopping_criteria import StoppingCriteriaList, LLamaQaStoppingCriteria
 
 import argparse
 import warnings
 import pandas as pd
 import numpy as np
 
-class DoLaT5:
+class DoLa:
     def __init__(self, model_name, device, num_gpus, max_gpu_memory=27):
         self.model_name = model_name
         self.device = device
-        self.num_gpus = int(num_gpus)
+        self.num_gpus = num_gpus
+        self.stopping_criteria = None
         self.max_gpu_memory = max_gpu_memory
-        self.stop_words = []
 
-        # Load model and tokenizer
         self.model, self.tokenizer = self.load_model(model_name)
-        self.model.to(device)
 
     def load_model(self, model_name):
-        if "t5" in model_name or "flan-t5" in model_name:
-            tokenizer = T5Tokenizer.from_pretrained(model_name)
-            model = T5ForConditionalGeneration.from_pretrained(model_name)
-        else:
-            tokenizer = AutoTokenizer.from_pretrained(model_name)
-            model = AutoModelForSeq2SeqLM.from_pretrained(model_name)
-        
         if self.device == "cuda":
-            model = model.to(self.device, dtype=torch.float16)
+            kwargs = {"torch_dtype": torch.float16, "offload_folder": f"{model_name}/offload"}
+            if self.num_gpus == "auto":
+                kwargs["device_map"] = "auto"
+            else:
+                self.num_gpus = int(self.num_gpus)
+                if self.num_gpus != 1:
+                    kwargs.update({
+                        "device_map": "auto",
+                        "max_memory": {i: f"{self.max_gpu_memory}GiB" for i in range(self.num_gpus)},
+                    })
         elif self.device == "cpu":
-            model = model.to(self.device)
+            kwargs = {}
         else:
             raise ValueError(f"Invalid device: {self.device}")
+        
+        tokenizer = AutoTokenizer.from_pretrained(model_name if not 'vicuna' in model_name else 'huggyllama/llama-7b')
+        if 't5' in model_name:
+            model = AutoModelForSeq2SeqLM.from_pretrained(model_name, low_cpu_mem_usage=True, **kwargs)
+        else:
+            model = AutoModelForCausalLM.from_pretrained(model_name,
+                low_cpu_mem_usage=True, **kwargs)
+
+        if self.device == "cuda" and self.num_gpus == 1:
+            model.cuda()
         
         return model, tokenizer
 
     def set_stop_words(self, stop_words):
         self.stop_words = stop_words
+        self.stopping_criteria = StoppingCriteriaList()
+        list_stop_word_ids = []
+        for stop_word in self.stop_words:
+            stop_word_ids = self.tokenizer.encode('\n' + stop_word)[3:]
+            list_stop_word_ids.append(stop_word_ids)
+            print("Added stop word: ", stop_word, 'with the ids', stop_word_ids, flush=True)
+        self.stopping_criteria.append(LLamaQaStoppingCriteria(list_stop_word_ids))
 
-    def generate(self, input_text, max_new_tokens=256, top_p=0.95, top_k=0, temperature=0.8, verbose=True, **kwargs):
+    def generate(self, input_text, max_new_tokens=256, top_p=0.95, top_k=0, temperature=0.8, mature_layer=None, premature_layer=None, candidate_premature_layers=[], mode='baseline', verbose=True, remove_stop_words=False, relative_top=0.1, **kwargs):
         with torch.no_grad():
+
             input_ids = self.tokenizer(input_text, return_tensors="pt").input_ids.to(self.device)
             max_len = input_ids.shape[-1] + max_new_tokens
 
-            # Prepare generation kwargs, ensuring unsupported arguments are not passed
-            generate_kwargs = {
-                "max_length": max_len,
-                "num_return_sequences": 1,
-                "top_p": top_p,
-                "top_k": top_k,
-                "temperature": temperature,
-            }
-            generate_kwargs.update(kwargs)
-            generate_kwargs.pop('mode', None)  # Remove unsupported 'mode'
+            if mode == 'baseline':
+                outputs = self.model.generate(input_ids, max_length=max_len, num_return_sequences=1,
+                                    output_scores=True, return_dict_in_generate=True, dola_decoding=False,
+                                    top_p=top_p, top_k=top_k, temperature=temperature, stopping_criteria=self.stopping_criteria, **kwargs)
+            elif mode == 'dola-static':
+                assert mature_layer is not None, "mature_layer must be specified"
+                assert premature_layer is not None, "premature_layer must be specified"
+                outputs = self.model.generate(input_ids, max_length=max_len, num_return_sequences=1,
+                                    output_scores=True, return_dict_in_generate=True, dola_decoding=True,
+                                    mature_layer=mature_layer, premature_layer=premature_layer,
+                                    top_p=top_p, top_k=top_k, temperature=temperature, stopping_criteria=self.stopping_criteria, relative_top=relative_top, **kwargs)
+            elif mode == 'dola':
+                assert mature_layer is not None, "mature_layer must be specified"
+                assert candidate_premature_layers is not None, "candidate_premature_layers must be specified"
+                outputs = self.model.generate(input_ids, max_length=max_len, num_return_sequences=1,
+                                        output_scores=True, return_dict_in_generate=True, dola_decoding=True,
+                                        top_p=top_p, top_k=top_k, temperature=temperature, stopping_criteria=self.stopping_criteria, relative_top=relative_top, 
+                                        mature_layer=mature_layer, premature_layer=None, candidate_premature_layers=candidate_premature_layers, **kwargs,)
+                premature_layer_dist = outputs.premature_layer_dist
+            sequences, scores = outputs.sequences, outputs.scores
 
-            # Initialize c_dist as an empty dictionary
-            c_dist = {}
+            # skip the tokens in the input prompt
+            gen_sequences = sequences[:, input_ids.shape[-1]:][0, :]
+            gen_arr = gen_sequences.cpu().numpy()
 
-            # Add here the logic for DoLa decoding if applicable
-            # For now, let's proceed with a simple generation
-            outputs = self.model.generate(input_ids, **generate_kwargs)
-            output_str = self.tokenizer.decode(outputs[0], skip_special_tokens=True)
+            output_str = self.tokenizer.decode(gen_sequences, skip_special_tokens=True)
 
             # if verbose:
             #     print('MODEL OUTPUT: \n{0}'.format(output_str))
 
-            if self.device == 'cuda':
-                torch.cuda.empty_cache()
+            if remove_stop_words:
+                for stop_word in self.stop_words:
+                    length_to_remove = len(stop_word)
+                    if output_str[-length_to_remove:] == stop_word:
+                        output_str = output_str[:-length_to_remove]
+                output_str = output_str.strip()
 
-            # c_dist remains an empty dictionary if no DoLa-specific logic is added
-            return output_str, c_dist
+        if self.device:
+            torch.cuda.empty_cache()
 
-        
+        return output_str, (premature_layer_dist if mode == 'dola' else None)
+
     def get_relative_top_filter(self, scores: torch.FloatTensor, relative_top: float = 0.1, min_tokens_to_keep: int = 1):
         scores_normalized = scores.log_softmax(dim=-1) 
         sorted_logits, sorted_indices = torch.sort(scores_normalized, descending=True)
@@ -130,6 +162,7 @@ class DoLaT5:
                 log_probs = diff_logits[range(diff_logits.shape[0]), continue_ids].sum().item()
 
             elif mode == 'dola':
+                print('DOLA DOLA DOLA')
                 premature_layer_dist = {l:0 for l in candidate_premature_layers}
                 picked_logits = []
                 result_dict = {}
@@ -187,4 +220,5 @@ class DoLaT5:
                 
                 log_probs = diff_logits[range(diff_logits.shape[0]), continue_ids].sum().item()
 
+        # print(log_probs)
         return log_probs, (premature_layer_dist if mode == 'dola' else None)

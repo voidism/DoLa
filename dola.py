@@ -215,5 +215,5 @@ class DoLa:
                     diff_logits = torch.where(relative_top_mask, relative_top_value, diff_logits)
                 
                 log_probs = diff_logits[range(diff_logits.shape[0]), continue_ids].sum().item()
-
+        
         return log_probs, (premature_layer_dist if mode == 'dola' else None)
