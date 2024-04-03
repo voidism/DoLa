@@ -1742,34 +1742,60 @@ class T5ForConditionalGeneration(T5PreTrainedModel):
             # See https://github.com/tensorflow/mesh/blob/fa19d69eafc9a482aff0b59ddd96b025c0cb207d/mesh_tensorflow/transformer/transformer.py#L586
             sequence_output = sequence_output * (self.model_dim**-0.5)
 
-        lm_logits = self.lm_head(sequence_output)
+        if early_exit_layers is not None:
+            logits_dict = {}
+            # loss_dict = {}
+            for i, early_exit_layer in enumerate(early_exit_layers):
+                lm_logits = self.lm_head(decoder_outputs.hidden_states[early_exit_layer])
+                logits_dict[early_exit_layer] = lm_logits
+            loss = None
+            if labels is not None:
+                loss_fct = CrossEntropyLoss(ignore_index=-100)
+                # move labels to correct device to enable PP
+                labels = labels.to(lm_logits.device)
+                loss = loss_fct(lm_logits.view(-1, lm_logits.size(-1)), labels.view(-1))
+                # TODO(thom): Add z_loss https://github.com/tensorflow/mesh/blob/fa19d69eafc9a482aff0b59ddd96b025c0cb207d/mesh_tensorflow/layers.py#L666
 
-        loss = None
-        if labels is not None:
-            loss_fct = CrossEntropyLoss(ignore_index=-100)
-            # move labels to correct device to enable PP
-            labels = labels.to(lm_logits.device)
-            loss = loss_fct(lm_logits.view(-1, lm_logits.size(-1)), labels.view(-1))
-            # TODO(thom): Add z_loss https://github.com/tensorflow/mesh/blob/fa19d69eafc9a482aff0b59ddd96b025c0cb207d/mesh_tensorflow/layers.py#L666
-
-        if not return_dict:
-            # output = (lm_logits,) + decoder_outputs[1:] + encoder_outputs
-            output = (lm_logits,) + decoder_outputs[1:]
-            return ((loss,) + output) if loss is not None else output
+            final_outputs = Seq2SeqLMOutput(
+                loss=loss,
+                logits=lm_logits,
+                past_key_values=decoder_outputs.past_key_values,
+                decoder_hidden_states=decoder_outputs.hidden_states,
+                decoder_attentions=decoder_outputs.attentions,
+                cross_attentions=decoder_outputs.cross_attentions,
+                encoder_last_hidden_state=encoder_outputs.last_hidden_state,
+                encoder_hidden_states=encoder_outputs.hidden_states,
+                encoder_attentions=encoder_outputs.attentions,
+            )
         
-        print("HELLO HELLO")
+            return logits_dict, final_outputs
+        else: 
+            lm_logits = self.lm_head(sequence_output)
 
-        return Seq2SeqLMOutput(
-            loss=loss,
-            logits=lm_logits,
-            past_key_values=decoder_outputs.past_key_values,
-            decoder_hidden_states=decoder_outputs.hidden_states,
-            decoder_attentions=decoder_outputs.attentions,
-            cross_attentions=decoder_outputs.cross_attentions,
-            encoder_last_hidden_state=encoder_outputs.last_hidden_state,
-            encoder_hidden_states=encoder_outputs.hidden_states,
-            encoder_attentions=encoder_outputs.attentions,
-        )
+            loss = None
+            if labels is not None:
+                loss_fct = CrossEntropyLoss(ignore_index=-100)
+                # move labels to correct device to enable PP
+                labels = labels.to(lm_logits.device)
+                loss = loss_fct(lm_logits.view(-1, lm_logits.size(-1)), labels.view(-1))
+                # TODO(thom): Add z_loss https://github.com/tensorflow/mesh/blob/fa19d69eafc9a482aff0b59ddd96b025c0cb207d/mesh_tensorflow/layers.py#L666
+
+            if not return_dict:
+                # output = (lm_logits,) + decoder_outputs[1:] + encoder_outputs
+                output = (lm_logits,) + decoder_outputs[1:]
+                return ((loss,) + output) if loss is not None else output
+
+            return Seq2SeqLMOutput(
+                loss=loss,
+                logits=lm_logits,
+                past_key_values=decoder_outputs.past_key_values,
+                decoder_hidden_states=decoder_outputs.hidden_states,
+                decoder_attentions=decoder_outputs.attentions,
+                cross_attentions=decoder_outputs.cross_attentions,
+                encoder_last_hidden_state=encoder_outputs.last_hidden_state,
+                encoder_hidden_states=encoder_outputs.hidden_states,
+                encoder_attentions=encoder_outputs.attentions,
+            )
 
     def prepare_inputs_for_generation(
         self,
