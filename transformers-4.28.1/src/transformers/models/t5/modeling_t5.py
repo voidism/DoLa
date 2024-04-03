@@ -1725,11 +1725,17 @@ class T5ForConditionalGeneration(T5PreTrainedModel):
             cross_attn_head_mask=cross_attn_head_mask,
             use_cache=use_cache,
             output_attentions=output_attentions,
-            output_hidden_states=output_hidden_states,
+            output_hidden_states=True,
             return_dict=return_dict,
         )
 
+        print("<<<<<")
+        print(f'past key: {past_key_values}')
+        print(f'return dic: {return_dict}')
+        print(f'hidden states: {output_hidden_states}')
+
         sequence_output = decoder_outputs[0]
+        decoder_hidden_states = decoder_outputs.hidden_states
 
         # Set device for model parallelism
         if self.model_parallel:
@@ -1746,7 +1752,7 @@ class T5ForConditionalGeneration(T5PreTrainedModel):
             logits_dict = {}
             # loss_dict = {}
             for i, early_exit_layer in enumerate(early_exit_layers):
-                lm_logits = self.lm_head(decoder_outputs.hidden_states[early_exit_layer])
+                lm_logits = self.lm_head(decoder_hidden_states[early_exit_layer])
                 logits_dict[early_exit_layer] = lm_logits
             loss = None
             if labels is not None:
