@@ -27,7 +27,7 @@ class DoLa:
 
     def load_model(self, model_name):
         if self.device == "cuda":
-            kwargs = {"torch_dtype": torch.float16, "offload_folder": f"{model_name}/offload"}
+            kwargs = {"torch_dtype": torch.float16, "offload_folder": f"{model_name}/offload", "is_encoder_decoder": True}
             if self.num_gpus == "auto":
                 kwargs["device_map"] = "auto"
             else:

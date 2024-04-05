@@ -219,6 +219,7 @@ class GreedySearchEncoderDecoderOutput(ModelOutput):
     decoder_attentions: Optional[Tuple[Tuple[torch.FloatTensor]]] = None
     cross_attentions: Optional[Tuple[Tuple[torch.FloatTensor]]] = None
     decoder_hidden_states: Optional[Tuple[Tuple[torch.FloatTensor]]] = None
+    premature_layer_dist: Optional[Dict[int, int]] = None
 
 
 @dataclass
@@ -2776,6 +2777,7 @@ class GenerationMixin:
                     decoder_attentions=decoder_attentions,
                     cross_attentions=cross_attentions,
                     decoder_hidden_states=decoder_hidden_states,
+                    premature_layer_dist=premature_layer_dist,
                 )
             else:
                 return GreedySearchDecoderOnlyOutput(
