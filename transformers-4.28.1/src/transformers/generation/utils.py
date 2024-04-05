@@ -2658,10 +2658,6 @@ class GenerationMixin:
                 early_exit_layers=early_exit_layers,
             )
 
-            # print(all_outputs)
-            print("\n>>>>>>>>>>")
-            print(len(all_outputs))
-            print([type(t) for t in all_outputs])
             dict_outputs = all_outputs[0]
             outputs = all_outputs[1]
 
