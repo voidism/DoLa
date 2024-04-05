@@ -1725,14 +1725,9 @@ class T5ForConditionalGeneration(T5PreTrainedModel):
             cross_attn_head_mask=cross_attn_head_mask,
             use_cache=use_cache,
             output_attentions=output_attentions,
-            output_hidden_states=True,
+            output_hidden_states=output_hidden_states or early_exit_layers is not None,
             return_dict=return_dict,
         )
-
-        print("<<<<<")
-        print(f'past key: {past_key_values}')
-        print(f'return dic: {return_dict}')
-        print(f'hidden states: {output_hidden_states}')
 
         sequence_output = decoder_outputs[0]
         decoder_hidden_states = decoder_outputs.hidden_states
@@ -1753,6 +1748,8 @@ class T5ForConditionalGeneration(T5PreTrainedModel):
             # loss_dict = {}
             for i, early_exit_layer in enumerate(early_exit_layers):
                 layer_output = decoder_hidden_states[early_exit_layer].to(self.lm_head.weight.device)
+                if (sequence_output.dtype in [torch.float16, torch.bfloat16]):
+                    layer_output.half()
                 lm_logits = self.lm_head(layer_output)
                 logits_dict[early_exit_layer] = lm_logits
             loss = None

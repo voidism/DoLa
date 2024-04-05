@@ -61,6 +61,29 @@ class LLamaQaStoppingCriteria(StoppingCriteria):
                     break
         return stop
 
+class T5StoppingCriteria(StoppingCriteria):
+    """
+    This class can be used to stop generation whenever the model generates '\nQ:' tokens. It means that the model has finished generating the answer and start generating a new question.
+    """
+    def __init__(self, list_token_ids_sequence: list = [[2247, 10]]):
+        self.token_ids_sequences = []
+        self.lengths = []
+        for token_ids_sequence in list_token_ids_sequence:
+            self.token_ids_sequences.append(torch.tensor(token_ids_sequence, dtype=torch.long))
+            self.lengths.append(len(token_ids_sequence))
+
+    @add_start_docstrings(STOPPING_CRITERIA_INPUTS_DOCSTRING)
+    def __call__(self, input_ids: torch.LongTensor, scores: torch.FloatTensor, **kwargs) -> bool:
+        # check the final {self.length} tokens
+        stop = False
+        for token_ids_sequence, length in zip(self.token_ids_sequences, self.lengths):
+            if input_ids.shape[-1] < length:
+                continue
+            else:
+                if bool(torch.all(input_ids[0, -length:] == token_ids_sequence.to(input_ids.device))):
+                    stop = True
+                    break
+        return stop
 
 class MaxLengthCriteria(StoppingCriteria):
     """

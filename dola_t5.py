@@ -8,7 +8,7 @@ import json
 import torch
 import torch.nn.functional as F
 from transformers import AutoTokenizer, AutoModelForCausalLM, AutoModelForSeq2SeqLM
-from transformers.generation.stopping_criteria import StoppingCriteriaList, LLamaQaStoppingCriteria
+from transformers.generation.stopping_criteria import StoppingCriteriaList, LLamaQaStoppingCriteria, T5StoppingCriteria
 
 import argparse
 import warnings
@@ -62,7 +62,7 @@ class DoLa:
             stop_word_ids = self.tokenizer.encode('\n' + stop_word)[3:]
             list_stop_word_ids.append(stop_word_ids)
             print("Added stop word: ", stop_word, 'with the ids', stop_word_ids, flush=True)
-        self.stopping_criteria.append(LLamaQaStoppingCriteria(list_stop_word_ids))
+        self.stopping_criteria.append(T5StoppingCriteria(list_stop_word_ids))
 
     def generate(self, input_text, max_new_tokens=256, top_p=0.95, top_k=0, temperature=0.8, mature_layer=None, premature_layer=None, candidate_premature_layers=[], mode='baseline', verbose=True, remove_stop_words=False, relative_top=0.1, **kwargs):
         with torch.no_grad():
