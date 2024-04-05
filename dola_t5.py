@@ -92,7 +92,8 @@ class DoLa:
             sequences, scores = outputs.sequences, outputs.scores
 
             # skip the tokens in the input prompt
-            gen_sequences = sequences[:, input_ids.shape[-1]:][0, :]
+            # gen_sequences = sequences[:, input_ids.shape[-1]:][0, :]
+            gen_sequences = sequences[:, 0:][0, :]
             gen_arr = gen_sequences.cpu().numpy()
 
             output_str = self.tokenizer.decode(gen_sequences, skip_special_tokens=True)
