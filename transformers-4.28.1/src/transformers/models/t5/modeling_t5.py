@@ -1747,9 +1747,7 @@ class T5ForConditionalGeneration(T5PreTrainedModel):
             logits_dict = {}
             # loss_dict = {}
             for i, early_exit_layer in enumerate(early_exit_layers):
-                layer_output = decoder_hidden_states[early_exit_layer].to(self.lm_head.weight.device)
-                if (sequence_output.dtype in [torch.float16, torch.bfloat16]):
-                    layer_output.half()
+                layer_output = decoder_hidden_states[early_exit_layer].to(self.lm_head.weight.device).half()
                 lm_logits = self.lm_head(layer_output)
                 logits_dict[early_exit_layer] = lm_logits
             loss = None
