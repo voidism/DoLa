@@ -15,8 +15,7 @@ import ssl
 import urllib.request
 import zipfile
 
-from dola import DoLa
-from dola_t5 import DoLaT5
+from dola_t5 import DoLa
 
 transformers.logging.set_verbosity(40)
 
@@ -96,14 +95,10 @@ if __name__ == "__main__":
         chunk_size = len(list_data_dict) // args.total_shard
         list_data_dict = list_data_dict[args.shard_id * chunk_size: (args.shard_id + 1) * chunk_size]
     
-    # Conditionally select DoLa version
-    if ('t5' in model_name):
-        llm = DoLaT5(model_name, device, num_gpus, args.max_gpu_memory)
-    else:
-        llm = DoLa(model_name, device, num_gpus, args.max_gpu_memory)
+    llm = DoLa(model_name, device, num_gpus, args.max_gpu_memory)
 
-    stop_word_list = ["Q:"]
-    llm.set_stop_words(stop_word_list)
+    # stop_word_list = ["Q:"]
+    # llm.set_stop_words(stop_word_list)
     early_exit_layers = [int(x) for x in args.early_exit_layers.split(',')]
     if len(early_exit_layers) == 1:
         print("MODE: naive decoding from the last layer", flush=True)
@@ -139,10 +134,10 @@ if __name__ == "__main__":
         generate_kwargs = dict(max_new_tokens=args.max_new_tokens, top_p=args.top_p, top_k=args.top_k, temperature=args.temperature, repetition_penalty=args.repetition_penalty, mode=mode, mature_layer=mature_layer, premature_layer=premature_layer, candidate_premature_layers=candidate_premature_layers)
         model_completion, c_dist = llm.generate(input_text, **generate_kwargs)
         
-        for stop_word in stop_word_list:
-            length_to_remove = len(stop_word)
-            if model_completion[-length_to_remove:] == stop_word:
-                model_completion = model_completion[:-length_to_remove]
+        # for stop_word in stop_word_list:
+        #     length_to_remove = len(stop_word)
+        #     if model_completion[-length_to_remove:] == stop_word:
+        #         model_completion = model_completion[:-length_to_remove]
         model_completion = model_completion.strip()
 
         if mode == "dola":
