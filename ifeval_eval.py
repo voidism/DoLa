@@ -36,23 +36,26 @@ def load_jsonl(file_path):
 def create_demo_text():
     question, answer = [], []
     
-    question.append("If a * b = 24. And a > b. Is a = 6? Your answer must contain one of the following exact phrases: \u201dMy answer is yes.\", \"My answer is no.\", \"My answer is maybe.\"")
-    answer.append("My answer is maybe. The variable a can be 6 if b is 4, but a can also be 8 if b is 3.")  # Based on answer_index -3
+    question.append("Write a sentence describing the flavor of coffee. Make sure the word 'roasted' appears at least two times in the sentence, and includes a bolded word. Like: *this is bolded text*.\"")
+    answer.append("The bold, *roasted* flavor of coffee envelopes the palate, infusing each sip with rich, *roasted* notes reminiscent of toasted caramel and dark chocolate.")  # Based on answer_index -3
 
-    question.append("Name four US states. Make sure the names are in English and all capital letters.")
-    answer.append("CALIFORNIA, TEXAS, NEW YORK, FLORIDA.")  # Based on answer_index 1
+    question.append("List the months of the year in reverse order. Make sure the names are in English and all capital letters.")
+    answer.append("DECEMBER, NOVEMBER, OCTOBER, SEPTEMBER, AUGUST, JULY, JUNE, MAY, APRIL, MARCH, FEBRUARY, JANUARY.")  # Based on answer_index 1
+
+    question.append("Write an advertisement for a toothpaste called \"Monsoon\". It's a toothpaste with a charcoal black color. Wrap your entire response with single quotation marks. Do not include the words toothpaste, fresh, or black in the advertisement.")
+    answer.append("'Experience the transformative power of 'Monsoon' as it redefines your dental routine. Let your smile sing with confidence as 'Monsoon' sweeps away impurities, unveiling the brilliance within. Embrace the allure of its dark hue, a testament to its potent cleansing properties. With each brush, indulge in a symphony of freshness and purity, leaving your mouth feeling harmoniously revitalized. Elevate your oral care routine with 'Monsoon' and unlock the rhythm of a radiant smile.'")
 
     question, answer = [], []
 
-    demo_text = 'Please pay attention to the instructions you are being asked to follow.' + '\n\n'
+    demo_text = 'To ensure accuracy and creativity in your responses, please follow the examples provided below as guides for structure, style, and content requirements.' + '\n\n'
     for i in range(len(question)):
-        demo_text += "Q: " + question[i] + "\nA: " + answer[i] + "\n\n"
+        demo_text += f'Example {i}: ' + "\nInstruction" + question[i] + "\nResponse" + answer[i] + "\n\n"
     return demo_text
 
 
 def build_prompt(input_text):
     demo = create_demo_text()
-    input_text_prompt = demo + "Q: " + input_text + "\n" + "A:"
+    input_text_prompt = demo + "Now, based on the instructions and examples provided, your task is: " + input_text
     return input_text_prompt
 
 if __name__ == "__main__":
