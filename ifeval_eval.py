@@ -35,19 +35,14 @@ def load_jsonl(file_path):
 
 def create_demo_text():
     question, answer = [], []
-    
-    question.append("Write a sentence describing the flavor of coffee. Make sure the word 'roasted' appears at least two times in the sentence, and includes a bolded word. Like: *this is bolded text*.\"")
+
+    question.append("Write a sentence describing the flavor of coffee. Make sure the word 'roasted' appears at least two times in the sentence, and include a bolded word. Like: *this is bolded text*.\"")
     answer.append("The bold, *roasted* flavor of coffee envelopes the palate, infusing each sip with rich, *roasted* notes reminiscent of toasted caramel and dark chocolate.")  # Based on answer_index -3
 
-    question.append("List the months of the year in reverse order. Make sure the names are in English and all capital letters.")
-    answer.append("DECEMBER, NOVEMBER, OCTOBER, SEPTEMBER, AUGUST, JULY, JUNE, MAY, APRIL, MARCH, FEBRUARY, JANUARY.")  # Based on answer_index 1
+    question.append("List the months of the year using all capital letters.")
+    answer.append("JANUARY, FEBRUARY, MARCH, APRIL, MAY, JUNE, JULY, AUGUST, SEPTEMBER, NOVEMBER, DECEMBER.") 
 
-    question.append("Write an advertisement for a toothpaste called \"Monsoon\". It's a toothpaste with a charcoal black color. Wrap your entire response with single quotation marks. Do not include the words toothpaste, fresh, or black in the advertisement.")
-    answer.append("'Experience the transformative power of 'Monsoon' as it redefines your dental routine. Let your smile sing with confidence as 'Monsoon' sweeps away impurities, unveiling the brilliance within. Embrace the allure of its dark hue, a testament to its potent cleansing properties. With each brush, indulge in a symphony of freshness and purity, leaving your mouth feeling harmoniously revitalized. Elevate your oral care routine with 'Monsoon' and unlock the rhythm of a radiant smile.'")
-
-    question, answer = [], []
-
-    demo_text = 'To ensure accuracy and creativity in your responses, please follow the examples provided below as guides for structure, style, and content requirements.' + '\n\n'
+    demo_text = 'Take note of the instructions and responses in the following examples:' + '\n\n'
     for i in range(len(question)):
         demo_text += f'Example {i}: ' + "\nInstruction" + question[i] + "\nResponse" + answer[i] + "\n\n"
     return demo_text
@@ -55,7 +50,7 @@ def create_demo_text():
 
 def build_prompt(input_text):
     demo = create_demo_text()
-    input_text_prompt = demo + "Now, based on the instructions and examples provided, your task is: " + input_text
+    input_text_prompt = demo + "Now your task is: " + input_text
     return input_text_prompt
 
 if __name__ == "__main__":
@@ -74,7 +69,7 @@ if __name__ == "__main__":
     parser.add_argument("--do-rating", action="store_true")
     parser.add_argument("--gpt3-config", type=str, default=None)
     parser.add_argument("--debug", action="store_true")
-    parser.add_argument("--max-new-tokens", type=int, default=50)
+    parser.add_argument("--max-new-tokens", type=int, default=1024)
     parser.add_argument("--top_p", type=float, default=0.95)
     parser.add_argument("--top_k", type=int, default=0)
     parser.add_argument("--temperature", type=float, default=0.9)
@@ -110,7 +105,7 @@ if __name__ == "__main__":
         premature_layer = None
         candidate_premature_layers = None
         if args.repetition_penalty is None:
-            args.repetition_penalty = 1.0
+            args.repetition_penalty = 1.2
     elif len(early_exit_layers) == 2:
         print(f"MODE: DoLa-static decoding with mature layer: {early_exit_layers[1]} and premature layer: {early_exit_layers[0]}")
         mode = "early_exit_contrastive"
@@ -133,7 +128,8 @@ if __name__ == "__main__":
     for i, prompt in enumerate(tqdm(list_data_dict)):
         result_dict = {}
 
-        input_text = build_prompt(prompt)
+        # input_text = build_prompt(prompt)
+        input_text = prompt
         generate_kwargs = dict(max_new_tokens=args.max_new_tokens, top_p=args.top_p, top_k=args.top_k, temperature=args.temperature, repetition_penalty=args.repetition_penalty, mode=mode, mature_layer=mature_layer, premature_layer=premature_layer, candidate_premature_layers=candidate_premature_layers)
         model_completion, c_dist = llm.generate(input_text, **generate_kwargs)
         
