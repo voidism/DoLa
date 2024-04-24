@@ -276,7 +276,7 @@ if __name__ == "__main__":
         candidate_premature_layers = None
     elif len(early_exit_layers) == 2:
         print(f"MODE: DoLa-static decoding with mature layer: {early_exit_layers[1]} and premature layer: {early_exit_layers[0]}")
-        mode = "early_exit_contrastive"
+        mode = "dola-static"
         mature_layer = early_exit_layers[1]
         premature_layer = early_exit_layers[0]
         candidate_premature_layers = None
