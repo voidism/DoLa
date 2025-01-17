@@ -9,7 +9,7 @@ DoLa: Decoding by Contrasting Layers Improves Factuality in Large Language Model
 
 [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/voidism/DoLa/blob/master/dola_evaluation.ipynb)
 
-Code for the paper "DoLa: Decoding by Contrasting Layers Improves Factuality in Large Language Models"
+Code for the ICLR 2024 paper "DoLa: Decoding by Contrasting Layers Improves Factuality in Large Language Models"
 
 Paper: https://arxiv.org/abs/2309.03883  
 Authors: [Yung-Sung Chuang](https://people.csail.mit.edu/yungsung/) $^\dagger$, [Yujia Xie](https://sites.google.com/view/yujia) $^\ddagger$, [Hongyin Luo](https://luohongyin.github.io/) $^\dagger$, [Yoon Kim](https://people.csail.mit.edu/yoonkim/) $^\dagger$, [James Glass](https://people.csail.mit.edu/jrg/) $^\dagger$, [Pengcheng He](https://scholar.google.com/citations?user=TS1RoxAAAAAJ&hl=en) $^\ddagger$  
@@ -214,10 +214,11 @@ For more details of GPT-4 evaluation, please check [vicuna-blog-eval](https://gi
 
 Please cite our paper if it's helpful to your work!
 ```
-@article{chuang2023dola,
+@inproceedings{chuang2024dola,
   title={DoLa: Decoding by Contrasting Layers Improves Factuality in Large Language Models},
-  author={Chuang, Yung-Sung and Xie, Yujia and Luo, Hongyin and Kim, Yoon and Glass, James and He, Pengcheng},
-  journal={arXiv preprint arXiv:2309.03883},
-  year={2023},
+  author={Yung-Sung Chuang and Yujia Xie and Hongyin Luo and Yoon Kim and James R. Glass and Pengcheng He},
+  booktitle={The Twelfth International Conference on Learning Representations},
+  year={2024},
+  url={https://openreview.net/forum?id=Th6NyL07na}
 }
 ```
