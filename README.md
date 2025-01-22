@@ -74,7 +74,7 @@ python factor_eval.py --model-name huggyllama/llama-65b --early-exit-layers 0,2,
 
 ### TruthfulQA (Multiple Choices)
 
-The `--data-path` should be a folder contains `TruthfulQA.csv`. If file not exists, it will be downloaded automatcially.
+The `--data-path` should be a folder contains `TruthfulQA.csv`. If file not exists, it will be downloaded automatically.
 
 #### Baseline
 ```bash
