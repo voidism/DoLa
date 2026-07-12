@@ -7,13 +7,41 @@ import json
 
 import torch
 import torch.nn.functional as F
-from transformers import AutoTokenizer, AutoModelForCausalLM, LlamaTokenizer
-from transformers.generation.stopping_criteria import StoppingCriteriaList, LLamaQaStoppingCriteria
+from transformers import AutoTokenizer, AutoModelForCausalLM
 
 import argparse
 import warnings
 import pandas as pd
 import numpy as np
+
+from transformers.generation.stopping_criteria import StoppingCriteriaList, StoppingCriteria
+
+class KeywordStoppingCriteria(StoppingCriteria):
+    """
+    This class can be used to stop generation whenever the model generates '\nQ:' tokens. It means that the model has finished generating the answer and start generating a new question.
+    """
+    def __init__(self, list_token_ids_sequence: list = [[29984, 29901]]):
+        self.token_ids_sequences = []
+        self.lengths = []
+        for token_ids_sequence in list_token_ids_sequence:
+            self.token_ids_sequences.append(torch.tensor(token_ids_sequence, dtype=torch.long))
+            self.lengths.append(len(token_ids_sequence))
+        
+    def __call__(self, input_ids: torch.LongTensor, scores: torch.FloatTensor, **kwargs) -> bool:
+        # check the final {self.length} tokens
+        stop = False
+        for token_ids_sequence, length in zip(self.token_ids_sequences, self.lengths):
+            if input_ids.shape[-1] < length:
+                continue
+            else:
+                try:
+                    if bool(torch.all(input_ids[0, -length:] == token_ids_sequence.to(input_ids.device))):
+                        stop = True
+                        break
+                except:
+                    print('Error in stopping criteria')
+                    import ipdb; ipdb.set_trace()
+        return stop
 
 class DoLa:
     def __init__(self, model_name, device, num_gpus, max_gpu_memory=27):
@@ -27,24 +55,24 @@ class DoLa:
 
     def load_model(self, model_name):
         if self.device == "cuda":
-            kwargs = {"torch_dtype": torch.float16, "offload_folder": f"{model_name}/offload"}
-            if self.num_gpus == "auto":
-                kwargs["device_map"] = "auto"
-            else:
-                self.num_gpus = int(self.num_gpus)
-                if self.num_gpus != 1:
-                    kwargs.update({
-                        "device_map": "auto",
-                        "max_memory": {i: f"{self.max_gpu_memory}GiB" for i in range(self.num_gpus)},
-                    })
+            kwargs = {"torch_dtype": torch.float16} #, "offload_folder": f"{model_name}/offload"}
+            # if self.num_gpus == "auto":
+            #     kwargs["device_map"] = "auto"
+            # else:
+            #     self.num_gpus = int(self.num_gpus)
+            #     if self.num_gpus != 1:
+            #         kwargs.update({
+            #             "device_map": "auto",
+            #             "max_memory": {i: f"{self.max_gpu_memory}GiB" for i in range(self.num_gpus)},
+            #         })
         elif self.device == "cpu":
             kwargs = {}
         else:
             raise ValueError(f"Invalid device: {self.device}")
         
         tokenizer = AutoTokenizer.from_pretrained(model_name if not 'vicuna' in model_name else 'huggyllama/llama-7b')
-        model = AutoModelForCausalLM.from_pretrained(model_name,
-            low_cpu_mem_usage=True, **kwargs)
+        model = AutoModelForCausalLM.from_pretrained(model_name, #low_cpu_mem_usage=True, 
+                                                     **kwargs)
 
         if self.device == "cuda" and self.num_gpus == 1:
             model.cuda()
@@ -56,10 +84,17 @@ class DoLa:
         self.stopping_criteria = StoppingCriteriaList()
         list_stop_word_ids = []
         for stop_word in self.stop_words:
-            stop_word_ids = self.tokenizer.encode('\n' + stop_word)[3:]
+            if 'llama-3' in self.model_name.lower():
+                stop_word_ids = self.tokenizer.encode(stop_word)
+            elif 'llama' in self.model_name.lower() or 'vicuna' in self.model_name.lower():
+                stop_word_ids = self.tokenizer.encode('\n' + stop_word)[3:]
+            elif 'gemma' in self.model_name.lower():
+                stop_word_ids = self.tokenizer.encode(stop_word)[1:]
+            else:
+                stop_word_ids = self.tokenizer.encode(stop_word)
             list_stop_word_ids.append(stop_word_ids)
             print("Added stop word: ", stop_word, 'with the ids', stop_word_ids, flush=True)
-        self.stopping_criteria.append(LLamaQaStoppingCriteria(list_stop_word_ids))
+        self.stopping_criteria.append(KeywordStoppingCriteria(list_stop_word_ids))
 
     def generate(self, input_text, max_new_tokens=256, top_p=0.95, top_k=0, temperature=0.8, mature_layer=None, premature_layer=None, candidate_premature_layers=[], mode='baseline', verbose=True, remove_stop_words=False, relative_top=0.1, **kwargs):
         with torch.no_grad():
@@ -69,23 +104,23 @@ class DoLa:
 
             if mode == 'baseline':
                 outputs = self.model.generate(input_ids, max_length=max_len, num_return_sequences=1,
-                                    output_scores=True, return_dict_in_generate=True, dola_decoding=False,
+                                    output_scores=True, return_dict_in_generate=True,
                                     top_p=top_p, top_k=top_k, temperature=temperature, stopping_criteria=self.stopping_criteria, **kwargs)
             elif mode == 'dola-static':
                 assert mature_layer is not None, "mature_layer must be specified"
                 assert premature_layer is not None, "premature_layer must be specified"
                 outputs = self.model.generate(input_ids, max_length=max_len, num_return_sequences=1,
-                                    output_scores=True, return_dict_in_generate=True, dola_decoding=True,
-                                    mature_layer=mature_layer, premature_layer=premature_layer,
-                                    top_p=top_p, top_k=top_k, temperature=temperature, stopping_criteria=self.stopping_criteria, relative_top=relative_top, **kwargs)
+                                    output_scores=True, return_dict_in_generate=True, 
+                                    dola_layers=[premature_layer],
+                                    top_p=top_p, top_k=top_k, temperature=temperature, stopping_criteria=self.stopping_criteria, **kwargs)
             elif mode == 'dola':
                 assert mature_layer is not None, "mature_layer must be specified"
                 assert candidate_premature_layers is not None, "candidate_premature_layers must be specified"
                 outputs = self.model.generate(input_ids, max_length=max_len, num_return_sequences=1,
-                                        output_scores=True, return_dict_in_generate=True, dola_decoding=True,
-                                        top_p=top_p, top_k=top_k, temperature=temperature, stopping_criteria=self.stopping_criteria, relative_top=relative_top, 
-                                        mature_layer=mature_layer, premature_layer=None, candidate_premature_layers=candidate_premature_layers, **kwargs,)
-                premature_layer_dist = outputs.premature_layer_dist
+                                        output_scores=True, return_dict_in_generate=True, 
+                                        top_p=top_p, top_k=top_k, temperature=temperature, stopping_criteria=self.stopping_criteria, 
+                                        dola_layers=candidate_premature_layers, **kwargs,)
+                # premature_layer_dist = outputs.premature_layer_dist
             sequences, scores = outputs.sequences, outputs.scores
 
             # skip the tokens in the input prompt
@@ -107,7 +142,7 @@ class DoLa:
         if self.device:
             torch.cuda.empty_cache()
 
-        return output_str, (premature_layer_dist if mode == 'dola' else None)
+        return output_str, None#, (premature_layer_dist if mode == 'dola' else None)
 
     def get_relative_top_filter(self, scores: torch.FloatTensor, relative_top: float = 0.1, min_tokens_to_keep: int = 1):
         scores_normalized = scores.log_softmax(dim=-1) 
@@ -159,7 +194,7 @@ class DoLa:
                 log_probs = diff_logits[range(diff_logits.shape[0]), continue_ids].sum().item()
 
             elif mode == 'dola':
-                premature_layer_dist = {l:0 for l in candidate_premature_layers}
+                # premature_layer_dist = {l:0 for l in candidate_premature_layers}
                 picked_logits = []
                 result_dict = {}
                 premature_layers = []

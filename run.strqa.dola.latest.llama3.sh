@@ -1,0 +1,4 @@
+python strqa_eval_migrate.py --early-exit-layers -1 --model-name /data/sls/d/llm/llama3/Meta-Llama-3-8B/ --output-path latest.strqa.van.latest.llama3.jsonl > log.strqa.van.latest.llama3 2>&1
+python strqa_eval_migrate.py --early-exit-layers 0,2,4,6,8,10,12,14,32 --model-name /data/sls/d/llm/llama3/Meta-Llama-3-8B/ --output-path latest.strqa.dola.latest.llama3.jsonl > log.strqa.dola.latest.llama3 2>&1
+python strqa_eval_migrate.py --early-exit-layers -1 --model-name /data/sls/d/llm/llama3/Meta-Llama-3-8B-Instruct/ --output-path latest.strqa.van.latest.llama3-it.jsonl > log.strqa.van.latest.llama3-it 2>&1
+python strqa_eval_migrate.py --early-exit-layers 0,2,4,6,8,10,12,14,32 --model-name /data/sls/d/llm/llama3/Meta-Llama-3-8B-Instruct/ --output-path latest.strqa.dola.latest.llama3-it.jsonl > log.strqa.dola.latest.llama3-it 2>&1
